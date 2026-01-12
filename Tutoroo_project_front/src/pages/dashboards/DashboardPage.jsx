@@ -50,6 +50,9 @@ function DashboardPage() {
 
       <div css={s.pageBg}>
         <main css={s.container}>
+          <div css={s.newtutorbtn}>
+            <div>신규 선생님 등록 +</div>
+            </div>
           <section css={s.greeting}>
             <div css={s.greetingText}>
               <h2>반가워요 {userName}님!</h2>
@@ -57,8 +60,8 @@ function DashboardPage() {
             </div>
 
             <div css={s.actionWrap}>
-              <button css={s.selectBtn}>학습선택 ▼</button>
-              <button css={s.mainBtn}>학습하러 가기</button>
+              <button>학습선택 ▼</button>
+              <button>학습하러 가기</button>
             </div>
           </section>
 
