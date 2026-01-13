@@ -77,7 +77,7 @@ export const form = css`
 ================================ */
 export const submitBtn = css`
   margin-top: 12px;
-  height: 44px;
+  height: 53px;
   border-radius: 10px;
   background: #ff8a3d;
   color: black;

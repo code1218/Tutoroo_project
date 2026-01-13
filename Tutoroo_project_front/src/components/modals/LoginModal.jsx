@@ -35,8 +35,8 @@ function LoginModal() {
 
         {/* 로그인 폼 */}
         <form onSubmit={handleSubmit} css={s.form}>
-          <input type="text" placeholder="ID" />
-          <input type="password" placeholder="PASSWORD" />
+          <input css={s.input} type="text" placeholder="ID" />
+          <input css={s.input} type="password" placeholder="PASSWORD" />
           <div css={s.optionRow}>
 
             {/* 로그인 상태 유지 */}
