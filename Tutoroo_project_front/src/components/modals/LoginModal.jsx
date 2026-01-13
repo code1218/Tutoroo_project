@@ -3,7 +3,7 @@ import * as s from "./styles";
 import useModalStore from "../../stores/modalStore";
 import useAuthStore from "../../stores/useAuthStore";
 
-import logoImg from "../../assets/images/mascots/logo.jpg";
+import logoImg from "../../assets/images/mascots/logo.png";
 import googleIcon from "../../assets/icons/socials/Google_icons.png";
 import naverIcon from "../../assets/icons/socials/Naver_icons.png";
 import kakaoIcon from "../../assets/icons/socials/Kakaotalk_icons.png";
@@ -31,21 +31,18 @@ function LoginModal() {
         {/* 로고 */}
         <div css={s.logo}>
           <img src={logoImg} alt="Tutoroo" />
-          <h2>Tutoroo</h2>
         </div>
 
         {/* 로그인 폼 */}
         <form onSubmit={handleSubmit} css={s.form}>
           <input type="text" placeholder="ID" />
           <input type="password" placeholder="PASSWORD" />
-
           <div css={s.optionRow}>
             {/* 로그인 상태 유지 */}
             <label css={s.keepLogin}>
               <input type="checkbox" />
               로그인 상태 유지
             </label>
-
             {/* 아이디 / 비밀번호 찾기 */}
             <div css={s.links}>
               <span css={s.findId} onClick={openFindId}>
@@ -56,32 +53,30 @@ function LoginModal() {
               </span>
             </div>
           </div>
-
           <button type="submit" css={s.submitBtn}>
             로그인
           </button>
         </form>
-
         {/* 회원가입 */}
         <div css={s.signupRow}>
           <div css={s.signupMent}>아직 계정이 없으신가요? </div>
-          <span css={s.signup} onClick={openSignUp}>
+          <span css={s.signupLink} onClick={openSignUp}>
             회원가입
           </span>
         </div>
 
         {/* 소셜 로그인 */}
         <div css={s.socialRow}>
-          <button css={[s.socialBtn, s.naver]}>
-            <img src={naverIcon} />
+          <button css={[s.socialBtn]}>
+            <img src={naverIcon} css={s.naver} />
           </button>
 
-          <button css={[s.socialBtn, s.google]}>
-            <img src={googleIcon} />
+          <button css={[s.socialBtn]}>
+            <img src={googleIcon} css={s.google} />
           </button>
 
-          <button css={[s.socialBtn, s.kakao]}>
-            <img src={kakaoIcon} />
+          <button css={[s.socialBtn]}>
+            <img src={kakaoIcon} css={s.kakao} />
           </button>
         </div>
       </div>
