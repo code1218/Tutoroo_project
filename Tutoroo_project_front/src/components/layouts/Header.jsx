@@ -1,18 +1,20 @@
 /** @jsxImportSource @emotion/react */
-
 import * as s from "./styles";
-import logoImg from "../../assets/images/mascots/logo.jpg"; // ✅ 네 경로 기준
 import { useNavigate } from "react-router-dom";
+import logoImg from "../../assets/images/mascots/logover2.png"; 
 
 function Header() {
-  const navigate = useNavigate();
-  
+  const navigate = useNavigate(); 
+
   return (
     <header css={s.header}>
       <div css={s.inner}>
-        <div css={s.logoWrap}>
+        <div 
+          css={s.logoWrap} 
+          onClick={() => navigate("/")} 
+          style={{ cursor: "pointer" }}
+        >
           <img css={s.logoImg} src={logoImg} alt="Tutoroo" />
-          <span css={s.logoText}>Tutoroo</span>
         </div>
 
         <button css={s.profileBtn} onClick={() => navigate("/mypage/verify")}>내 정보 ▼</button>
