@@ -1,17 +1,20 @@
 import { css } from "@emotion/react";
 
 export const sidebarContainer = css`
+    
     width: 250px;
     margin-right: 50px;
     flex-shrink: 0; //화면 줄어도 사이드바 유지
+   
 `;
 
 export const sidebarTitle = css`
-    font-size: 36px;
-    font-weight: 600;
+    font-size: 32px;
+    font-weight: 700;
     color: #333;
     padding-bottom: 20px;
     border-bottom: 2px solid #333;
+    
     
 `;
 
