@@ -9,6 +9,7 @@ import WithdrawalPage from "../pages/mypage/WithdrawalPage";
 
 import TutorSelectionPage from "../pages/tutor/TutorSelectionPage";
 import StudyPage from "../pages/studys/StudyPage";
+import LevelTestPage from "../pages/leveltests/LevelTestPage";
 
 function Router() {
   return (
@@ -17,11 +18,11 @@ function Router() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/mypage/verify" element={<PasswordVerifyPage />} />
       {/* <Route path="sidebar" element={<Sidebar />} /> */}
-      <Route path="mypage/changeinfo" element={<ChangeInfoPage/>}/>
+      <Route path="mypage/changeinfo" element={<ChangeInfoPage />} />
       <Route path="mypage/changepassword" element={<ChangePasswordPage />} />
       <Route path="mypage/withdrawl" element={<WithdrawalPage />} />
-      
 
+      <Route path="/level-test" element={<LevelTestPage />} />
       <Route path="/tutor" element={<TutorSelectionPage />} />
       <Route path="/study" element={<StudyPage />} />
     </Routes>
