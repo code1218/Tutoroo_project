@@ -15,6 +15,25 @@ export const container = css`
   padding-bottom: 40px;
 `;
 
+export const newtutorbtn = css`
+  display: flex;
+  justify-content: flex-end;
+
+  & > div {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 160px;
+    height: 40px;
+    border-radius: 12px;
+    font-size: 14px;
+    border: none;
+    background: #ff8a3d;
+    color: #fff;
+    font-weight: 500;
+  }
+`;
+
 /* =========================
    Greeting
 ========================= */
@@ -29,10 +48,10 @@ export const greetingText = css`
   h2 {
     font-size: 28px;
     font-weight: 700;
+    margin: 0;
   }
 
   p {
-    margin-top: 6px;
     font-size: 14px;
     color: #666;
   }
@@ -41,24 +60,24 @@ export const greetingText = css`
 export const actionWrap = css`
   display: flex;
   gap: 12px;
-`;
 
-export const selectBtn = css`
-  width: 175px;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid #000;
-  background: #fff;
-`;
+    & > button:nth-of-type(1) {
+      width: 175px;
+      height: 40px;
+      border-radius: 12px;
+      border: 1px solid #000;
+      background: #fff;
+    }
 
-export const mainBtn = css`
-  width: 240px;
-  height: 40px;
-  border-radius: 12px;
-  border: none;
-  background: #ff8a3d;
-  color: #fff;
-  font-weight: 600;
+    & > button:nth-of-type(2) {
+      width: 240px;
+      height: 40px;
+      border-radius: 12px;
+      border: none;
+      background: #ff8a3d;
+      color: #fff;
+      font-weight: 600;
+    }
 `;
 
 /* =========================

@@ -7,12 +7,13 @@ import Sidebar from "../pages/mypage/Sidebar";
 import ChangePasswordPage from "../pages/mypage/ChangePasswordPage";
 import WithdrawalPage from "../pages/mypage/WithdrawalPage";
 
+import TutorSelectionPage from "../pages/tutor/TutorSelectionPage";
+import StudyPage from "../pages/studys/StudyPage";
+
 function Router() {
   return (
     <Routes>
       <Route path="/" element={<DashboardPage />} />
-
-      {/* 선택: /login 진입 시 대시보드로 보내고 로그인 모달만 오픈 */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/mypage/verify" element={<PasswordVerifyPage />} />
       {/* <Route path="sidebar" element={<Sidebar />} /> */}
@@ -20,6 +21,9 @@ function Router() {
       <Route path="mypage/changepassword" element={<ChangePasswordPage />} />
       <Route path="mypage/withdrawl" element={<WithdrawalPage />} />
       
+
+      <Route path="/tutor" element={<TutorSelectionPage />} />
+      <Route path="/study" element={<StudyPage />} />
     </Routes>
   );
 }
