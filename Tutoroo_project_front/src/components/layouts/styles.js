@@ -31,7 +31,6 @@ export const logoImg = css`
 export const profileBtn = css`
   width: 90px;
   height: 34px;
-  margin-right: 40px;
   padding: 0 16px;
   border-radius: 12px;
   border: 1px solid #dbdbdb;
