@@ -68,10 +68,27 @@ export const rankCard = (rank) => css`
   border: 1px solid #E5E5E5;
   background-color: #fff;
   
-  ${rank <= 3 && `
+    ${rank <= 3 && `
     border-color: #FF9F43;
     box-shadow: 0 4px 12px rgba(255, 159, 67, 0.1);
-  `}
+    `}
+`;
+
+export const rankNullText = css`
+  text-align: center;
+  padding: "50px";
+  color: "#666";
+`;
+
+export const loadingText = css`
+  text-align: center;
+  padding: 50px;
+`;
+
+export const isUnauthenticated = css`
+  text-align: center;
+  color: #999;
+  padding: 20px;
 `;
 
 export const rankBadge = (rank) => css`
@@ -85,13 +102,14 @@ export const rankBadge = (rank) => css`
 `;
 
 export const userInfo = css`
-  flex: 1;
   display: flex;
+  justify-content: center;
   align-items: center;
+  flex: 1;
   gap: 16px;
+  margin-top: 20px;
 `;
 
-/* ✅ 기본 아이콘 (이미지 없을 때) */
 export const userIcon = css`
   width: 40px;
   height: 40px;
@@ -103,7 +121,6 @@ export const userIcon = css`
   background-position: center;
 `;
 
-/* ✅ 실제 프로필 이미지 (API 데이터 있을 때) */
 export const userProfileImg = css`
   width: 40px;
   height: 40px;
@@ -160,9 +177,4 @@ export const bigPoint = css`
   font-size: 36px;
   font-weight: 800;
   color: #FF9F43;
-`;
-
-export const currentRank = css`
-  font-size: 15px;
-  color: #666;
 `;

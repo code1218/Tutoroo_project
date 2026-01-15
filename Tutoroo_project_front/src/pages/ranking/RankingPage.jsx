@@ -57,9 +57,13 @@ function RankingPage() {
                 onChange={(e) => setFilterAge(e.target.value)}
               >
                 <option value="전체">연령 전체</option>
+                <option value="0">10대 미만</option>
                 <option value="10">10대</option>
                 <option value="20">20대</option>
                 <option value="30">30대</option>
+                <option value="40">40대</option>
+                <option value="50">50대</option>
+                <option value="60">60대 이상</option>
               </select>
             </div>
           </section>
@@ -70,7 +74,7 @@ function RankingPage() {
             {/* [좌측] 랭킹 리스트 */}
             <div css={s.rankListArea}>
               {isLoading ? (
-                <div style={{ textAlign: "center", padding: "50px" }}>로딩 중...</div>
+                <div css={s.loadingText}>로딩 중...</div>
               ) : rankingList.length > 0 ? (
                 rankingList.map((user, index) => {
                    const rank = user.dailyRank || index + 1; 
@@ -111,7 +115,7 @@ function RankingPage() {
                   );
                 })
               ) : (
-                <div style={{ textAlign: "center", padding: "50px", color: "#666" }}>
+                <div css={s.rankNullText}>
                   랭킹 데이터가 없습니다.
                 </div>
               )}
@@ -128,10 +132,7 @@ function RankingPage() {
                     <div css={s.bigPoint}>
                       {myRanking.totalPoint?.toLocaleString() || 0} P
                     </div>
-                    <div css={s.currentRank}>
-                      현재 전체 {myRanking.dailyRank || "-"}위
-                    </div>
-                    <div css={s.userInfo} style={{ marginTop: '20px', justifyContent: 'center' }}>
+                    <div css={s.userInfo}>
                          {myRanking.profileImage ? (
                           <img src={myRanking.profileImage} css={s.userProfileImg} alt="my profile" />
                         ) : (
@@ -141,7 +142,7 @@ function RankingPage() {
                     </div>
                   </div>
                 ) : (
-                  <div style={{ textAlign: "center", color: "#999", padding: "20px" }}>
+                  <div css={s.isUnauthenticated}>
                     로그인 정보가<br/>없습니다.
                   </div>
                 )}
