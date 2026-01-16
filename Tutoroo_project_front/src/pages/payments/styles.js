@@ -8,7 +8,7 @@ export const container = css`
     width: 100%;
     height: calc(100vh - 72px);
     background-color: #fff;
-    padding: 50px 100px;
+    padding: 50px 250px;
     box-sizing: border-box;
     position: relative;
 `;
@@ -27,7 +27,7 @@ export const cardContainer = css`
     width: 100%;
     justify-content: center;
     gap: 50px;
-    margin-top: 40px;
+    margin-top: 60px;
 
 `;
 
@@ -174,11 +174,31 @@ export const paymentBtn = css`
 // payment
 // =========================================================================
 // paymentpage
+export const paymentContainer = css`
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: calc(100vh - 72px);
+    background-color: #fff;
+    padding: 50px 250px;
+    box-sizing: border-box;
+    position: relative;
+`;
+
+export const paymentPageTitle = css`
+    font-size: 55px;
+    font-weight: 600;
+    color: #333;
+    padding-left: 100px;
+
+
+`
 
 export const methodButtons = css`
     
     display: flex;
     gap: 15px;
+    margin-top: 150px;
     margin-bottom: 30px;
     padding: 40px 30px 10px;
     
@@ -229,6 +249,122 @@ export const cardBtn = css`
     background-color: #F2F2F2;
     color: #333;
     border: 1px solid #ddd;
+`;
+
+export const detailBox = css`
+    display: flex;
+    width: 100%;
+    height: 200px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 40px;
+    margin-bottom: 30px;
+    justify-content: space-around;
+    background-color: #fff;
+
+`;
+
+export const methodInfo = css`
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-top: 10px;
+
+`;
+
+
+export const methodTitle = (method) => css`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 20px 10px;
+    
+    color: ${method === "KAKAO" ? '#3A1D1E' : method === "NAVER" ? '#03C75A' : '#333'};
+`;   
+
+export const methodDesc = css`
+    display: flex;
+    font-size: 16px;
+    color: #666;
+    align-items: center;
+
+`;
+
+export const paymentDivider = css`
+    width: 300px;
+    height: 2px;
+    background-color: #ddd;
+    margin: 0 auto;
+`;
+
+export const priceInfo = css`
+    display: flex;
+    flex-direction: column;
+    width: 300px;
+    padding-left: 30px;
+    border-left: 1px solid #eee;
+    justify-content: center;
+`;
+
+export const priceRow = css`
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 16px;
+    color: #555;
+
+    strong {
+        color: #333;
+        font-weight: 500;
+    }
+`;
+
+export const totalRow = css`
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+`;
+
+export const footer = css`
+    display: flex;
+    justify-content: space-between;
+`;
+
+export const backBtn = css`
+    display: flex;
+    background-color: #ffffff;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 400;
+    padding: 5px 20px;
+    cursor: pointer;
+    align-items: center;
+    transition: 0.2s;
+
+    &:hover {
+        background-color: #dbdbdb;
+    }
+`;
+
+export const payBtn = css`
+    display: flex;
+    font-size: 20px;
+    font-weight: 400;
+    border-radius: 10px;
+    align-items: center;
+    padding: 10px 20px;
+    cursor: pointer;
+    background-color: #FF8A3D;
+    transition: 0.2s;
+
+    &:hover {
+        background-color: #e67e22;
+    }
 `
+
 
 
