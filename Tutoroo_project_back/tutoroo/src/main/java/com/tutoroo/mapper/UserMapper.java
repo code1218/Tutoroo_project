@@ -23,25 +23,21 @@ public interface UserMapper {
     void updateUserContact(@Param("id") Long id, @Param("phone") String phone);
     void updateSocialUser(UserEntity user);
 
-    // --- [학습 & 포인트 & 펫 (여기가 중요)] ---
+    // --- [포인트 관리 (분리됨)] ---
+    // 포인트 획득 (랭킹+지갑)
+    void earnPoints(@Param("userId") Long userId, @Param("amount") int amount);
+    // 포인트 사용 (지갑만)
+    void spendPoints(@Param("userId") Long userId, @Param("amount") int amount);
 
-    // 1. [다마고치용] 포인트 직접 변경 (PetService 오류 해결용)
-    void updateUserPoint(@Param("userId") Long userId, @Param("point") int point);
-
-    // 2. 학습 플랜 완료 보상
     void updateUserPointByPlan(@Param("planId") Long planId, @Param("point") int point);
-
-    // 3. 포인트 리셋
     void resetAllUserPoints();
-
 
     // --- [랭킹 & 라이벌] ---
     List<UserEntity> getRankingList(@Param("gender") String gender, @Param("ageGroup") Integer ageGroup);
     List<UserEntity> findAllByOrderByTotalPointDesc();
     UserEntity findPotentialRival(@Param("myId") Long myId, @Param("myPoint") int myPoint);
 
-
-    // --- [스케줄러 & 리포트] ---
+    // --- [관리/스케줄러] ---
     List<UserEntity> findUsersForWeeklyReport();
     List<UserEntity> findWithdrawnUsersForPurge();
     void deleteUserPermanently(Long id);

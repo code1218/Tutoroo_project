@@ -16,27 +16,25 @@ public class PetInfoEntity {
     private Long userId;
     private String petName;
 
-    // 기본 스탯
+    private String petType;     // PetType Enum Name (TIGER, RABBIT...)
+    private int stage;          // 1~5
+    private String status;      // ACTIVE, GRADUATED
+
     private int fullness;
     private int intimacy;
     private int exp;
 
-    // [신규] 심화 스탯 (High Quality)
-    private int cleanliness;  // 위생 (0~100)
-    private int stress;       // 스트레스 (0~100)
-    private int energy;       // 에너지 (0~100)
-    private boolean isSleeping; // 수면 상태
+    private int cleanliness;
+    private int stress;
+    private int energy;
+    private boolean isSleeping;
 
-    // 성장 및 외형
-    private int stage;
-    private String petType;
-    private String equippedItems; // JSON 문자열
+    private String equippedItems;
 
-    // 시간 정보
     private LocalDateTime lastFedAt;
     private LocalDateTime lastPlayedAt;
-    private LocalDateTime lastCleanedAt; // [신규] 마지막 청소
-    private LocalDateTime lastSleptAt;   // [신규] 잠든 시간
+    private LocalDateTime lastCleanedAt;
+    private LocalDateTime lastSleptAt;
     private LocalDateTime birthDate;
     private LocalDateTime createdAt;
 }
