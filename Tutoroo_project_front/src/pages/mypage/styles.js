@@ -89,7 +89,7 @@ export const submitBtn = css`
 export const wrapper = css`
     display: flex;
     width: 100%;
-    height: calc(100vh - 20px);
+    height: calc(100vh - 50px);
     background-color: #ffffff;
     padding-top: 50px;
     overflow: hidden;
@@ -103,7 +103,7 @@ export const mainContainer = css`
     height: 100%;
     justify-content: center;
     align-items: flex-start;
-    padding-top: 50px;
+    padding-top: 20px;
     padding-bottom: 100px;
 `;
 

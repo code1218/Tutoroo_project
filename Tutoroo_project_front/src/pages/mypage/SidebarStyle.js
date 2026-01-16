@@ -3,7 +3,7 @@ import { css } from "@emotion/react";
 export const sidebarContainer = css`
     
     width: 250px;
-    margin-right: 250px;
+    margin-right: 200px;
     flex-shrink: 0; 
    
 `;
