@@ -4,10 +4,12 @@ import * as s  from "./styles";
 import Header from "../../components/layouts/Header";
 import { RiKakaoTalkFill } from "react-icons/ri";
 import { SiNaver } from "react-icons/si";
-import { FaCreditCard } from "react-icons/fa";
+import { FaCheck, FaCreditCard } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 
 function PaymentPage() {
     const [ payMethod, setPayMethod ] = useState("KAKAO");
+    const navigate = useNavigate();
 
    const method = {
         KAKAO: {
@@ -29,8 +31,8 @@ function PaymentPage() {
 
     return <>
         <Header />
-        <div css={s.container}>
-            <h2 css={s.pageTitle}>결제 수단 선택</h2>
+        <div css={s.paymentContainer}>
+            <h2 css={s.paymentPageTitle}>결제 수단 선택</h2>
 
             <div css={s.methodButtons}>
                 <button 
@@ -58,11 +60,48 @@ function PaymentPage() {
                 </button>
             </div>
 
-            {/* <div css={s.detailBox}>
+            <div css={s.detailBox}>
                 <div css={s.methodInfo}>
-                    
+                    <h3 css={s.methodTitle(payMethod)}>
+                        {payMethod === "KAKAO" && <RiKakaoTalkFill />}    
+                        {payMethod === "NAVER" && <SiNaver />}    
+                        {payMethod === "CARD" && <FaCreditCard />}  
+
+                        <span style={{marginLeft: "5px"}}>{method[payMethod].title}</span> 
+                    </h3>
+                    <p css={s.methodDesc}>
+                        <FaCheck size={12} color="#03C75A" style={{marginRight: "8px"}}/>
+                        {method[payMethod].desc}
+                    </p>
                 </div>
-            </div> */}
+
+                <div css={s.priceInfo}>
+                    <div css={s.priceRow}>
+                        <span>구독 요금</span>
+                        {/* =============================== */}
+                    </div>
+                    <div css={s.paymentDivider}></div>
+
+                    <div css={s.totalRow}>
+                        <span>부가세</span>
+                        <strong className="total"> 0 원</strong>
+                    </div>
+
+                    <div css={s.paymentDivider}></div>
+
+                    <div css={s.totalRow}>
+                        <span>총 결제 금액</span>
+                        <strong className="total">9,900원 / 월</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div css={s.footer}>
+                <button css={s.backBtn} onClick={() => navigate(-1)}> ← 뒤로 가기 </button>
+                <button css={s.payBtn}>
+                    결제하기 <FaCheck style={{marginLeft: '8px'}}/>
+                </button>
+            </div>
         </div>
     </>
 }
