@@ -57,7 +57,7 @@ public class TutorService {
     private final CommonMapper commonMapper;
     private final FileStore fileStore;
     private final ApplicationEventPublisher eventPublisher;
-    private final PetService petService; // [추가] 펫 버프 시스템 연동
+    private final PetService petService;
 
     public TutorService(ChatClient.Builder chatClientBuilder,
                         OpenAiAudioSpeechModel speechModel,
@@ -70,7 +70,7 @@ public class TutorService {
                         CommonMapper commonMapper,
                         FileStore fileStore,
                         ApplicationEventPublisher eventPublisher,
-                        PetService petService) { // [추가] 생성자 주입
+                        PetService petService) {
         this.chatClient = chatClientBuilder
                 .defaultSystem("당신은 Tutoroo의 AI 튜터입니다. 학생에게 친절하고 명확하게 설명해주세요.")
                 .build();
@@ -94,20 +94,35 @@ public class TutorService {
         StudyPlanEntity plan = studyMapper.findPlanById(request.planId());
         if (plan == null) throw new TutorooException(ErrorCode.STUDY_PLAN_NOT_FOUND);
 
-        String customName = (plan.getCustomTutorName() != null) ? plan.getCustomTutorName() : "나만의 AI 튜터";
-        String selectedStyle = (request.personaName() != null) ? request.personaName() : plan.getPersona();
-        String styleDescription = defineStyleTrait(selectedStyle, customName);
+        String customName = (plan.getCustomTutorName() != null) ? plan.getCustomTutorName() : "AI 선생님";
+
+        // [DB 연동] 선생님 페르소나 가져오기
+        String promptKey = "TEACHER_" + plan.getPersona();
+        String systemInstruction = commonMapper.findPromptContentByKey(promptKey);
+
+        if (systemInstruction == null) {
+            log.warn("선생님 프롬프트 없음: {}. 기본값 사용.", promptKey);
+            systemInstruction = "너는 친절하고 유능한 AI 과외 선생님이야.";
+        }
+
         String memoryContext = buildMemoryContext(plan.getId());
+        String dailyMood = (request.dailyMood() != null) ? request.dailyMood() : "평범함";
 
-        if (request.dailyMood() != null) memoryContext += "\n- 오늘 학생 기분: " + request.dailyMood();
-
-        String template = getPromptTemplate("CLASS_START");
-        String promptText = String.format(template, customName, styleDescription, memoryContext, plan.getGoal(), request.dayCount());
+        String promptText = String.format("""
+                [시스템 지시]: %s
+                [학생 정보]: 이름은 '%s'라고 불러줘. 현재 기분은 '%s'야.
+                [이전 학습 기억]:
+                %s
+                
+                [오늘의 목표]: %d일차 수업. 주제는 '%s'.
+                위 설정을 바탕으로 수업을 시작하는 오프닝 멘트를 해줘.
+                """,
+                systemInstruction, customName, dailyMood, memoryContext, request.dayCount(), plan.getGoal());
 
         String aiMessage = chatClient.prompt().user(promptText).call().content();
 
         String audioUrl = generateTieredTtsWithCache(aiMessage, user.getEffectiveTier());
-        String imageUrl = generateImage("Illustration for " + plan.getGoal() + " class, " + selectedStyle + " style, vector art");
+        String imageUrl = generateImage("Illustration for " + plan.getGoal() + " class, education style, vector art");
 
         return new TutorDTO.ClassStartResponse(request.dayCount() + "일차: " + plan.getGoal(), aiMessage, audioUrl, imageUrl, null, 25, 5);
     }
@@ -120,11 +135,17 @@ public class TutorService {
         double avgScore = logs.stream().mapToInt(StudyLogEntity::getTestScore).average().orElse(70.0);
 
         String difficulty = (avgScore >= 90) ? "HARD" : (avgScore <= 60 ? "EASY" : "NORMAL");
+
+        // [DB 연동] 선생님 페르소나 적용
+        String personaPrompt = commonMapper.findPromptContentByKey("TEACHER_" + plan.getPersona());
+        if (personaPrompt == null) personaPrompt = "친절한 선생님";
+
+        // [DB 연동] 테스트 생성 프롬프트 템플릿 사용
         String template = getPromptTemplate("TEST_ADAPTIVE");
-        String promptText = String.format(template, plan.getGoal(), difficulty, (int) avgScore, dayCount);
+        String promptText = String.format(template, personaPrompt, (int)avgScore, difficulty, plan.getGoal(), dayCount);
 
         String question = chatClient.prompt().user(promptText).call().content();
-        String imageUrl = generateImage("Visual aid for: " + question + ", subject: " + plan.getGoal());
+        String imageUrl = generateImage("Visual aid for quiz: " + plan.getGoal() + ", minimalist style");
 
         return new TutorDTO.DailyTestResponse("MISSION [" + difficulty + "]", question, imageUrl, null, 300);
     }
@@ -146,22 +167,23 @@ public class TutorService {
         }
 
         int score = parseScore(aiResponse);
-        String summary = aiResponse.contains("★") ? aiResponse.substring(aiResponse.indexOf("★")) : "요약 없음";
+        String summary = aiResponse.contains("점수") ? aiResponse.substring(aiResponse.indexOf("점수")) : "학습 내용 정리";
 
-        // 1. 기본 포인트 계산
-        int basePointChange = ((score >= 80) ? 100 : (score <= 40 ? -50 : 0)) + evaluateAttitude(textAnswer);
+        // 1. 기본 포인트 계산 (태도 점수 포함)
+        int attitudePoint = evaluateAttitude(textAnswer);
+        int basePointChange = ((score >= 80) ? 100 : (score <= 40 ? 10 : 50)) + attitudePoint;
         int finalPointChange = basePointChange;
 
-        // 2. [RPG 요소 적용] 펫 버프 확인 (포인트를 얻는 경우에만 적용)
+        // 2. [펫 버프 적용]
         if (basePointChange > 0) {
             double multiplier = petService.getPointMultiplier(userId);
             if (multiplier > 1.0) {
                 finalPointChange = (int) (basePointChange * multiplier);
-                log.info("펫 버프 발동! User: {}, Multiplier: {}, Point: {} -> {}", userId, multiplier, basePointChange, finalPointChange);
+                log.info("펫 버프 적용: {} -> {}", basePointChange, finalPointChange);
             }
         }
 
-        if (finalPointChange != 0) userMapper.updateUserPointByPlan(planId, finalPointChange);
+        if (finalPointChange > 0) userMapper.updateUserPointByPlan(planId, finalPointChange);
 
         boolean isPassed = score >= 60;
         int currentDay = getCurrentDayCount(planId);
@@ -178,35 +200,41 @@ public class TutorService {
 
         updateStreak(user);
 
-        // 펫 성장 연동: 합격 시 이벤트 발행
+        // [펫 경험치] 60점 이상 시 이벤트 발생
         if (isPassed) {
             try {
                 eventPublisher.publishEvent(new StudyCompletedEvent(userId, score));
             } catch (Exception e) {
-                log.warn("펫 경험치 지급 실패 (이벤트 오류): {}", e.getMessage());
+                log.warn("펫 경험치 이벤트 실패: {}", e.getMessage());
             }
         }
 
         if (currentDay == 1 && plan.getCustomTutorName() == null) {
-            plan.setCustomTutorName("나만의 AI 튜터");
+            plan.setCustomTutorName("AI 선생님");
             studyMapper.updatePlan(plan);
         }
 
         String audioUrl = generateTieredTtsWithCache(aiResponse.substring(0, Math.min(aiResponse.length(), 200)), user.getEffectiveTier());
-        String expImage = (score < 100) ? generateImage("Explanation diagram for: " + plan.getGoal() + " - " + summary) : null;
+        String expImage = (score < 100) ? generateImage("Explanation diagram for: " + plan.getGoal()) : null;
 
         return new TutorDTO.TestFeedbackResponse(score, aiResponse, summary, audioUrl, expImage, null, isPassed);
     }
 
-    // --- [핵심 기능 4: 대화형 피드백 (Redis Chat Memory 적용)] ---
+    // --- [핵심 기능 4: 대화형 피드백] ---
     @Transactional(readOnly = true)
     public TutorDTO.FeedbackChatResponse adjustCurriculum(Long userId, Long planId, String message) {
         UserEntity user = userMapper.findById(userId);
+        StudyPlanEntity plan = studyMapper.findPlanById(planId);
         String conversationKey = "chat:" + planId + ":" + userId;
 
         List<Message> history = loadChatHistory(conversationKey);
 
+        // 선생님 페르소나 적용
+        String systemInstruction = commonMapper.findPromptContentByKey("TEACHER_" + plan.getPersona());
+        if (systemInstruction == null) systemInstruction = "친절한 튜터";
+
         String aiResponse = chatClient.prompt()
+                .system(systemInstruction)
                 .messages(history)
                 .user(message)
                 .call()
@@ -220,7 +248,7 @@ public class TutorService {
         return new TutorDTO.FeedbackChatResponse(aiResponse, audioUrl);
     }
 
-    // --- [핵심 기능 5: 시험 문제 생성 (JSON)] ---
+    // --- [핵심 기능 5: 시험 문제 생성] ---
     @Transactional(readOnly = true)
     public TutorDTO.ExamGenerateResponse generateExam(Long userId, Long planId, int startDay, int endDay) {
         StudyPlanEntity plan = studyMapper.findPlanById(planId);
@@ -257,7 +285,7 @@ public class TutorService {
         int basePoint = score * 5;
         int finalPoint = basePoint;
 
-        // 2. [RPG 요소 적용] 펫 버프 확인
+        // 2. [펫 버프 적용]
         if (basePoint > 0) {
             double multiplier = petService.getPointMultiplier(userId);
             if (multiplier > 1.0) {
@@ -267,7 +295,7 @@ public class TutorService {
 
         userMapper.updateUserPointByPlan(request.planId(), finalPoint);
 
-        // 펫 성장 연동 (시험도 60점 넘으면 경험치)
+        // [펫 경험치] 60점 이상
         if (score >= 60) {
             try {
                 eventPublisher.publishEvent(new StudyCompletedEvent(userId, score));
@@ -346,7 +374,7 @@ public class TutorService {
     private void saveChatMessage(String key, Message message) {
         try {
             String role;
-            String content = message.getText(); // M6+ 대응
+            String content = message.getText();
 
             if (message instanceof UserMessage) {
                 role = "USER";
@@ -369,7 +397,10 @@ public class TutorService {
 
     private String analyzeUniversalImage(MultipartFile imageFile, String goal) {
         try {
-            String promptText = String.format(getPromptTemplate("VISION_FEEDBACK"), goal);
+            String template = getPromptTemplate("VISION_FEEDBACK");
+            if (template.startsWith("Prompt:")) template = "주제: %s. 이 이미지를 분석해서 피드백해줘.";
+
+            String promptText = String.format(template, goal);
             byte[] imageBytes = imageFile.getBytes();
 
             return chatClient.prompt()
@@ -380,18 +411,6 @@ public class TutorService {
             log.error("Vision Analysis Error: {}", e.getMessage());
             return "이미지 분석 중 오류가 발생했습니다: " + e.getMessage();
         }
-    }
-
-    private String defineStyleTrait(String selection, String customName) {
-        if (selection.equals(customName)) return "오리지널 커스텀 스타일";
-        return switch (selection) {
-            case "호랑이" -> "호랑이 (엄격함, 스파르타, 강한 어조)";
-            case "토끼" -> "토끼 (발랄함, 칭찬 위주, 빠른 속도)";
-            case "거북이" -> "거북이 (매우 느림, 차분함, 반복 설명)";
-            case "캥거루" -> "캥거루 (활동적, 친구 같은 친근함)";
-            case "드래곤" -> "드래곤 (고어체, 지혜로운 조언)";
-            default -> selection + " 스타일";
-        };
     }
 
     private String buildMemoryContext(Long planId) {
@@ -478,7 +497,7 @@ public class TutorService {
 
     private int evaluateAttitude(String t) {
         try {
-            String res = chatClient.prompt().user("답안: \"" + t + "\". 태도점수 0~10 숫자만.").call().content();
+            String res = chatClient.prompt().user("답안: \"" + t + "\". 성실성과 태도를 0~10점 사이의 숫자로만 평가해.").call().content();
             return Integer.parseInt(res.replaceAll("[^0-9]", ""));
         } catch (Exception e) { return 0; }
     }

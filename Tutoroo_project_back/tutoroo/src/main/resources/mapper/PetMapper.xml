@@ -3,25 +3,33 @@
 <mapper namespace="com.tutoroo.mapper.PetMapper">
 
     <select id="findByUserId" resultType="com.tutoroo.entity.PetInfoEntity">
+        SELECT * FROM pet_info
+        WHERE user_id = #{userId} AND status = 'ACTIVE'
+            LIMIT 1
+    </select>
+
+    <select id="findAllByUserId" resultType="com.tutoroo.entity.PetInfoEntity">
         SELECT * FROM pet_info WHERE user_id = #{userId}
     </select>
 
-    <select id="findAllPets" resultType="com.tutoroo.entity.PetInfoEntity">
-        SELECT * FROM pet_info
+    <select id="findById" resultType="com.tutoroo.entity.PetInfoEntity">
+        SELECT * FROM pet_info WHERE pet_id = #{petId}
+    </select>
+
+    <select id="findAllActivePets" resultType="com.tutoroo.entity.PetInfoEntity">
+        SELECT * FROM pet_info WHERE status = 'ACTIVE'
     </select>
 
     <insert id="createPet" parameterType="com.tutoroo.entity.PetInfoEntity" useGeneratedKeys="true" keyProperty="petId">
         INSERT INTO pet_info (
-            user_id, pet_name,
+            user_id, pet_name, pet_type, stage, status,
             fullness, intimacy, exp,
             cleanliness, stress, energy, is_sleeping,
-            stage, pet_type,
             created_at, last_fed_at, last_played_at, last_cleaned_at, last_slept_at
         ) VALUES (
-                     #{userId}, #{petName},
+                     #{userId}, #{petName}, #{petType}, #{stage}, 'ACTIVE',
                      #{fullness}, #{intimacy}, #{exp},
                      100, 0, 100, false,
-                     #{stage}, #{petType},
                      NOW(), NOW(), NOW(), NOW(), NULL
                  )
     </insert>
@@ -37,7 +45,9 @@
             energy = #{energy},
             is_sleeping = #{isSleeping},
             stage = #{stage},
+            status = #{status},
             pet_type = #{petType},
+            pet_name = #{petName},
             equipped_items = #{equippedItems},
             last_fed_at = #{lastFedAt},
             last_played_at = #{lastPlayedAt},
@@ -46,13 +56,8 @@
         WHERE pet_id = #{petId}
     </update>
 
-    <select id="findNextEvolutionType" resultType="string">
-        SELECT next_pet_type
-        FROM pet_evolution_rule
-        WHERE current_stage = #{currentStage}
-          AND required_exp &lt;= #{exp}
-        ORDER BY required_exp DESC
-            LIMIT 1
+    <select id="findRequiredExpForNextStage" resultType="Integer">
+        SELECT required_exp FROM pet_growth_rule WHERE stage = #{stage}
     </select>
 
     <insert id="saveDiary" parameterType="com.tutoroo.entity.PetDiaryEntity">
@@ -63,7 +68,6 @@
     <select id="findSkillEffect" resultType="double">
         SELECT effect_value FROM pet_skills
         WHERE pet_type = #{petType} AND skill_code = #{skillCode}
-            LIMIT 1
     </select>
 
 </mapper>

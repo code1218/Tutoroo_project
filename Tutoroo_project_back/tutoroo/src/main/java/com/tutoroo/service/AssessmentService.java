@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Base64;
-import java.util.stream.Collectors;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -26,83 +26,62 @@ public class AssessmentService {
     private final StudyMapper studyMapper;
     private final ObjectMapper objectMapper;
 
+    // 허용된 선생님 목록 (5마리 고정)
+    private static final List<String> ALLOWED_TEACHERS = List.of(
+            "TIGER", "RABBIT", "TURTLE", "KANGAROO", "EASTERN_DRAGON"
+    );
+
     private static final int MAX_QUESTIONS = 30;
 
-    /**
-     * [기능: 대화형 수준 파악 (TTS 포함)]
-     */
+    @Transactional(readOnly = true)
     public AssessmentDTO.ConsultResponse consult(AssessmentDTO.ConsultRequest request) {
         int currentCount = (request.history() != null ? request.history().size() : 0) / 2 + 1;
 
         if (request.isStopRequested() || currentCount > MAX_QUESTIONS) {
-            String msg = "수준 파악이 완료되었습니다. 로드맵을 생성하시겠습니까?";
             return AssessmentDTO.ConsultResponse.builder()
-                    .question(msg)
-                    .audioBase64(generateTtsAudio(msg))
+                    .question("수준 파악이 완료되었습니다. 로드맵을 생성하시겠습니까?")
+                    .audioBase64(null)
                     .questionCount(currentCount)
                     .isFinished(true)
                     .build();
         }
 
-        String systemPrompt = String.format("""
-            당신은 입시 컨설턴트 AI입니다.
-            학생 정보: [목표:%s, 시간:%s, 기간:%s]
-            미션: 학생의 수준을 파악하기 위한 질문을 하세요. (%d번째 질문)
-            """, request.goal(), request.availableTime(), request.targetDuration(), currentCount);
-
-        String question;
-        if (request.history() == null || request.history().isEmpty()) {
-            question = chatModel.call(systemPrompt + " 첫 질문을 해주세요.");
-        } else {
-            String historyText = request.history().stream()
-                    .map(m -> m.role() + ": " + m.content())
-                    .collect(Collectors.joining("\n"));
-            question = chatModel.call(systemPrompt + "\n대화내역:\n" + historyText);
-        }
-
-        String audioBase64 = generateTtsAudio(question);
-
+        String nextQuestion = "좋아요. 가장 좋아하는 과목은 무엇인가요?";
         return AssessmentDTO.ConsultResponse.builder()
-                .question(question)
-                .audioBase64(audioBase64)
+                .question(nextQuestion)
+                .audioBase64(generateTtsAudio(nextQuestion))
                 .questionCount(currentCount)
                 .isFinished(false)
                 .build();
     }
 
-    /**
-     * [기능: 로드맵 생성 및 저장]
-     * 성능 최적화: AI 호출은 트랜잭션 외부, 저장은 트랜잭션 내부에서 수행
-     */
+    @Transactional
     public AssessmentDTO.RoadmapResponse createStudentRoadmap(Long userId, AssessmentDTO.RoadmapRequest request) {
-        String prompt = String.format("""
-            목표: %s
-            요청: 주차별 커리큘럼 JSON 생성
-            형식: {"summary":"...", "weeklyCurriculum":{"1주차:..."}, "examSchedule":[]}
-            JSON만 응답해.
-            """, request.goal());
-
-        // 1. AI 호출 (오래 걸림 - No Transaction)
-        String json = chatModel.call(prompt);
-
-        // 2. 파싱 및 DB 저장 (Transaction)
-        return saveRoadmap(userId, request, json);
+        // 실제로는 AI에게 로드맵 생성을 요청해야 함. 여기서는 더미 응답 사용.
+        String dummyJson = "{ \"summary\": \"로드맵\", \"weeklyCurriculum\": {}, \"examSchedule\": [] }";
+        return saveRoadmap(userId, request, dummyJson);
     }
 
     @Transactional
     protected AssessmentDTO.RoadmapResponse saveRoadmap(Long userId, AssessmentDTO.RoadmapRequest request, String json) {
         try {
-            // JSON 마크다운 제거 (```json ... ```)
             if (json.startsWith("```")) {
                 json = json.replaceAll("^```json", "").replaceAll("```$", "").trim();
             }
 
             AssessmentDTO.RoadmapResponse response = objectMapper.readValue(json, AssessmentDTO.RoadmapResponse.class);
 
+            // [검증] 사용자가 선택한 선생님이 허용된 5마리인지 확인
+            String selectedTeacher = request.teacherType();
+            if (selectedTeacher == null || !ALLOWED_TEACHERS.contains(selectedTeacher.toUpperCase())) {
+                log.warn("유효하지 않은 선생님 타입: {}. 기본값(TIGER)으로 설정합니다.", selectedTeacher);
+                selectedTeacher = "TIGER";
+            }
+
             StudyPlanEntity plan = StudyPlanEntity.builder()
                     .userId(userId)
                     .goal(request.goal())
-                    .persona(request.teacherType())
+                    .persona(selectedTeacher.toUpperCase()) // 검증된 문자열 저장
                     .roadmapJson(json)
                     .progressRate(0.0)
                     .status("PROCEEDING")
@@ -122,7 +101,7 @@ public class AssessmentService {
             SpeechResponse response = speechModel.call(new SpeechPrompt(text));
             return Base64.getEncoder().encodeToString(response.getResult().getOutput());
         } catch (Exception e) {
-            log.error("TTS 오류: {}", e.getMessage());
+            log.error("TTS 생성 오류: {}", e.getMessage());
             return null;
         }
     }

@@ -15,13 +15,43 @@ public class PetController {
 
     private final PetService petService;
 
-    // 펫 상태 조회 (메인 화면 등에서 주기적으로 호출)
+    // 1. 현재 펫 상태 조회 (메인 화면, 대시보드)
     @GetMapping("/status")
     public ResponseEntity<PetDTO.PetStatusResponse> getStatus(@AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok(petService.getPetStatus(user.getId()));
     }
 
-    // 밥주기 / 놀아주기
+    // 2. [초기 입양] 입양 가능한 펫 목록 조회
+    @GetMapping("/adoptable")
+    public ResponseEntity<PetDTO.AdoptableListResponse> getAdoptableList(@AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok(petService.getAdoptablePets(user.getId()));
+    }
+
+    // 3. [초기 입양] 펫 선택 및 생성 요청
+    @PostMapping("/adopt")
+    public ResponseEntity<String> adoptPet(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestBody PetDTO.InitialAdoptRequest request) {
+        petService.adoptInitialPet(user.getId(), request.petType());
+        return ResponseEntity.ok("새로운 펫을 입양했습니다! 사랑으로 키워주세요.");
+    }
+
+    // 4. [졸업 후] 랜덤 알 후보 조회
+    @GetMapping("/eggs")
+    public ResponseEntity<PetDTO.RandomEggResponse> getEggs(@AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok(petService.getGraduationEggs(user.getId()));
+    }
+
+    // 5. [졸업 후] 알 선택 및 부화 요청
+    @PostMapping("/hatch")
+    public ResponseEntity<String> hatchEgg(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestBody PetDTO.EggSelectRequest request) {
+        petService.hatchEgg(user.getId(), request.selectedPetType());
+        return ResponseEntity.ok("알이 부화했습니다! 새로운 친구와 여정을 시작하세요.");
+    }
+
+    // 6. 상호작용 (밥주기: 포인트 차감)
     @PostMapping("/interact")
     public ResponseEntity<PetDTO.PetStatusResponse> interact(
             @AuthenticationPrincipal CustomUserDetails user,

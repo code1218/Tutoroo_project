@@ -1,38 +1,62 @@
 package com.tutoroo.dto;
 
 import lombok.Builder;
+import java.util.List;
 
-/**
- * [기능: 펫(다마고치) 관련 데이터 전송 객체 (Record 변환 완료)]
- * 설명: 펫의 상태 조회(Response)와 상호작용 요청(Request) 규격을 정의합니다.
- */
 public class PetDTO {
 
     // 1. 펫 상태 응답
     @Builder
     public record PetStatusResponse(
+            Long petId,
             String petName,
-
-            // --- [스탯 정보] ---
-            int fullness,       // 배고픔 (0~100)
-            int intimacy,       // 친밀도 (0~100)
-            int exp,            // 경험치
-            int cleanliness,    // 위생 (0~100, 똥 아이콘 표시용)
-            int stress,         // 스트레스 (0~100, 표정 변화용)
-            int energy,         // 에너지 (0~100)
-            boolean isSleeping, // 수면 상태 여부 (Zzz 애니메이션용)
-
-            // --- [외형 정보] ---
-            int stage,          // 진화 단계 (1, 2, 3...)
-            String petType,     // 펫 종류 (EGG, BABY_SLIME 등)
-
-            // --- [메시지] ---
-            String statusMessage // 펫이 유저에게 건네는 말
+            int fullness,
+            int intimacy,
+            int exp,
+            int maxExp, // 다음 단계까지 필요한 경험치 (UI 게이지용)
+            int cleanliness,
+            int stress,
+            int energy,
+            boolean isSleeping,
+            int stage,
+            String petType,
+            String status, // ACTIVE, GRADUATED
+            String statusMessage
     ) {}
 
     // 2. 펫 상호작용 요청
     public record InteractionRequest(
-            // 허용 값: FEED, PLAY, CLEAN, SLEEP, WAKE_UP
-            String actionType
+            String actionType // FEED, PLAY, CLEAN, SLEEP, WAKE_UP
+    ) {}
+
+    // 3. 입양 가능한 펫 목록 응답 (초기 입양용)
+    @Builder
+    public record AdoptableListResponse(
+            List<PetSummary> availablePets,
+            String message // "회원님의 등급(BASIC)에서는 3마리 중 선택 가능합니다."
+    ) {}
+
+    @Builder
+    public record PetSummary(
+            String type,        // Enum Name
+            String name,        // 한글 이름
+            String description  // 설명
+    ) {}
+
+    // 4. 초기 입양 요청
+    public record InitialAdoptRequest(
+            String petType // 사용자가 선택한 종족
+    ) {}
+
+    // 5. 졸업 후 랜덤 알 후보 응답
+    @Builder
+    public record RandomEggResponse(
+            List<PetSummary> candidates, // 알 후보 (Basic은 1개, Prem은 3개)
+            int choiceCount // 선택 가능한 개수
+    ) {}
+
+    // 6. 알 선택 요청
+    public record EggSelectRequest(
+            String selectedPetType
     ) {}
 }
