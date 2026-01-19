@@ -4,16 +4,18 @@ import lombok.Builder;
 import java.util.List;
 
 /**
- * [기능: 랭킹 데이터 전송 객체 (Record 변환 완료)]
- * 설명: 랭킹 페이지에서 상위 랭커(Top 3)와 전체 랭킹 리스트를 전달합니다.
+ * [기능: 랭킹 정보 전송 객체 (Record)]
+ * 설명: 전체 랭킹 리스트, 상위 3명, 그리고 내 랭킹 정보를 포함합니다.
  */
-@Builder
 public record RankingDTO(
-        // 1~3등 (메달 표시용)
+        // 1~3등 (메달 표시 및 상단 강조용)
         List<RankEntry> topRankers,
 
         // 전체 랭킹 리스트 (최대 100명)
-        List<RankEntry> allRankers
+        List<RankEntry> allRankers,
+
+        // [New] 내 랭킹 정보 (로그인 시에만 존재)
+        RankEntry myRank
 ) {
 
     /**
