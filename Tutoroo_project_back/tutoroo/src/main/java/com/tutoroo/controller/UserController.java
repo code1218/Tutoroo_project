@@ -17,14 +17,19 @@ public class UserController {
 
     private final UserService userService;
 
-    // 1. 대시보드 조회
+    // 1. 회원 상세 정보 조회 (수정 화면 진입 시 "Before" 정보 표시용)
+    @GetMapping("/profile")
+    public ResponseEntity<UserDTO.ProfileInfo> getProfileInfo(@AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok(userService.getProfileInfo(user.getUsername()));
+    }
+
+    // 2. 대시보드 조회
     @GetMapping("/dashboard")
     public ResponseEntity<UserDTO.DashboardDTO> getDashboard(@AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok(userService.getAdvancedDashboard(user.getUsername()));
     }
 
-    // 2. 회원 정보 수정 (이미지 포함)
-    // 반환값 변경: 단순 String -> UpdateResponse (Before/After 정보 포함)
+    // 3. 회원 정보 수정 (이미지 포함) -> 결과로 "Before" & "After" 반환
     @PatchMapping(value = "/update", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<UserDTO.UpdateResponse> updateUserInfo(
             @AuthenticationPrincipal CustomUserDetails user,
@@ -35,14 +40,14 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
 
-    // 3. 라이벌 매칭 요청
+    // 4. 라이벌 매칭 요청
     @PostMapping("/match-rival")
     public ResponseEntity<String> matchRival(@AuthenticationPrincipal CustomUserDetails user) {
         String result = userService.matchRival(user.getId());
         return ResponseEntity.ok(result);
     }
 
-    // 4. 회원 탈퇴 요청
+    // 5. 회원 탈퇴 요청
     @PostMapping("/withdraw")
     public ResponseEntity<String> withdraw(
             @AuthenticationPrincipal CustomUserDetails user,
@@ -50,5 +55,15 @@ public class UserController {
 
         userService.withdrawUser(user.getId(), request);
         return ResponseEntity.ok("회원 탈퇴 처리가 완료되었습니다. 90일 후 데이터가 영구 삭제됩니다.");
+    }
+
+    // 6. 비밀번호 검증 API (수정 화면 진입 전 보안 확인)
+    @PostMapping("/verify-password")
+    public ResponseEntity<String> verifyPassword(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestBody UserDTO.PasswordVerifyRequest request) {
+
+        userService.verifyPassword(user.getId(), request.password());
+        return ResponseEntity.ok("비밀번호 인증 성공");
     }
 }
