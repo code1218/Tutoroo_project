@@ -38,4 +38,61 @@ export const profileBtn = css`
   background: #ffd8a8;
   font-weight: 500;
   cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  line-height: 1;
+  text-decoration: none;
+`;
+
+export const profileWrap = css`
+  position: relative;
+  display: flex;
+  align-items: center;
+`;
+
+export const profileBtnActive = css`
+  border-color: #ff8a3d;
+`;
+
+export const caret = css`
+  display: inline-block;
+  margin-left: 4px;
+  transition: transform 0.15s ease;
+`;
+
+export const caretOpen = css`
+  transform: rotate(180deg);
+`;
+
+export const profileMenu = css`
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 170px;
+  padding: 8px;
+  border: 1px solid #dbdbdb;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+`;
+
+export const menuItem = css`
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+
+  &:hover {
+    background: #fff1e0;
+  }
 `;

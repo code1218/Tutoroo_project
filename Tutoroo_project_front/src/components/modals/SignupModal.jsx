@@ -485,7 +485,7 @@ function SignUpModal() {
               </label>
               <input
                 css={[s.input, fieldErrors.age && s.fieldError]}
-                placeholder="정확한 나이를 기입해주세요"
+                placeholder="숫자만 기입해주세요"
                 type="number"
                 value={age}
                 onChange={(e) => {
