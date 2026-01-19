@@ -6,43 +6,79 @@ import java.util.Map;
 
 public class AssessmentDTO {
 
-    // 1. 상담 요청
+    // --- [1] 상담 및 진단 관련 ---
+    @Builder
+    public record StudyStartRequest(
+            String goal, String deadline, String availableTime, String teacherType
+    ) {}
+
     @Builder
     public record ConsultRequest(
-            String message,
-            List<Message> history,
-            boolean isStopRequested,
-            String goal,
-            String availableTime,
-            String targetDuration
+            StudyStartRequest studyInfo, List<Message> history, String lastUserMessage
     ) {}
 
-    // 2. 상담 응답
     @Builder
     public record ConsultResponse(
-            String question,
-            String audioUrl, // [최적화 변경] Base64 데이터 대신 파일 접근 URL 반환
-            int questionCount,
-            boolean isFinished
+            String aiMessage, String audioUrl, boolean isFinished
     ) {}
 
-    // 3. 로드맵 생성 요청
     @Builder
-    public record RoadmapRequest(
-            String goal,
-
-            // 선생님 타입 문자열 (예: "TIGER", "EASTERN_DRAGON")
-            String teacherType
+    public record AssessmentSubmitRequest(
+            StudyStartRequest studyInfo, List<Message> history
     ) {}
 
-    // 4. 로드맵 응답
+    // [대시보드/상담결과용] 복합 응답
     @Builder
-    public record RoadmapResponse(
+    public record AssessmentResultResponse(
+            Long planId,
+            String analyzedLevel,
+            String analysisReport,
+            RoadmapOverview overview,
+            String message
+    ) {}
+
+    // --- [2] 로드맵 데이터 구조 (DB 저장용) ---
+    @Builder
+    public record RoadmapData(
             String summary,
-            Map<String, String> weeklyCurriculum,
+            List<Chapter> tableOfContents,
+            Map<String, List<DailyDetail>> detailedCurriculum,
             List<String> examSchedule
     ) {}
 
+    public record Chapter(String week, String title, String description) {}
+
     @Builder
-    public record Message(String role, String content) {}
+    public record RoadmapOverview(String summary, List<Chapter> chapters) {}
+
+    public record DailyDetail(String day, String topic, String method, String material) {}
+
+    // --- [3] 기존 StudyController 호환용 DTO ---
+
+    // [Fix] 인자 3개로 확정 (currentLevel 포함)
+    @Builder
+    public record RoadmapRequest(
+            String goal,
+            String teacherType,
+            String currentLevel // 없을 경우 null 허용
+    ) {}
+
+    // [Fix] 기존 컨트롤러 반환 타입 호환
+    @Builder
+    public record RoadmapResponse(
+            String summary,
+            Map<String, String> weeklyCurriculum, // 단순화된 커리큘럼
+            List<String> examSchedule
+    ) {}
+
+    // --- 공통 ---
+    @Builder public record Message(String role, String content) {}
+
+    // --- 레벨 테스트 (기존 유지) ---
+    @Builder public record LevelTestRequest(String subject) {}
+    @Builder public record LevelTestResponse(String testId, String subject, List<TestQuestion> questions) {
+        public record TestQuestion(int questionNo, String question, List<String> options) {}
+    }
+    @Builder public record TestSubmitRequest(String testId, String subject, List<Integer> answers) {}
+    @Builder public record AssessmentResult(String level, int score, String analysis, String recommendedPath) {}
 }

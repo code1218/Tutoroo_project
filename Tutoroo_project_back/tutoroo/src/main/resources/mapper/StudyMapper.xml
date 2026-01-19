@@ -3,8 +3,15 @@
 <mapper namespace="com.tutoroo.mapper.StudyMapper">
 
     <insert id="savePlan" parameterType="com.tutoroo.entity.StudyPlanEntity" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO study_plans (user_id, goal, persona, custom_tutor_name, roadmap_json, start_date, progress_rate, status, is_paid, created_at)
-        VALUES (#{userId}, #{goal}, #{persona}, #{customTutorName}, #{roadmapJson}, NOW(), #{progressRate}, #{status}, #{isPaid}, NOW())
+        INSERT INTO study_plans (
+            user_id, goal, persona, custom_tutor_name, roadmap_json,
+            start_date, progress_rate, status, is_paid, created_at, updated_at,
+            current_level, target_level
+        ) VALUES (
+                     #{userId}, #{goal}, #{persona}, #{customTutorName}, #{roadmapJson},
+                     NOW(), #{progressRate}, #{status}, #{isPaid}, NOW(), NOW(),
+                     #{currentLevel}, #{targetLevel}
+                 )
     </insert>
 
     <select id="findById" resultType="com.tutoroo.entity.StudyPlanEntity">
@@ -26,14 +33,14 @@
         WHERE user_id = #{userId} AND status = 'PROCEEDING'
     </select>
 
-    <update id="updateProgress" parameterType="com.tutoroo.entity.StudyPlanEntity">
+    <update id="updateProgress">
         UPDATE study_plans
         SET progress_rate = #{progressRate},
             updated_at = NOW()
         WHERE id = #{id}
     </update>
 
-    <update id="updatePlan" parameterType="com.tutoroo.entity.StudyPlanEntity">
+    <update id="updatePlan">
         UPDATE study_plans
         SET goal = #{goal},
             roadmap_json = #{roadmapJson},
@@ -44,6 +51,10 @@
             updated_at = NOW()
         WHERE id = #{id}
     </update>
+
+    <delete id="deletePlan">
+        DELETE FROM study_plans WHERE id = #{id}
+    </delete>
 
     <insert id="saveLog" parameterType="com.tutoroo.entity.StudyLogEntity" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO study_logs (
@@ -80,6 +91,16 @@
                             JOIN study_plans p ON l.plan_id = p.id
         WHERE p.user_id = #{userId}
           AND DATE(l.study_date) = #{date}
+    </select>
+
+    <select id="findLogsByUserIdAndMonth" resultType="com.tutoroo.entity.StudyLogEntity">
+        SELECT l.*
+        FROM study_logs l
+                 JOIN study_plans p ON l.plan_id = p.id
+        WHERE p.user_id = #{userId}
+            AND YEAR(l.study_date) = #{year}
+          AND MONTH(l.study_date) = #{month}
+        ORDER BY l.study_date ASC
     </select>
 
 </mapper>
