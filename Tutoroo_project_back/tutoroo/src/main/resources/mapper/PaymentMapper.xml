@@ -29,4 +29,22 @@
         WHERE imp_uid = #{impUid}
     </select>
 
+    <select id="findAllByUserId" resultType="com.tutoroo.entity.PaymentEntity">
+        SELECT
+            id,
+            user_id AS userId,
+            plan_id AS planId,
+            imp_uid AS impUid,
+            merchant_uid AS merchantUid,
+            item_name AS itemName,
+            pay_method AS payMethod,
+            pg_provider AS pgProvider,
+            amount,
+            status,
+            paid_at AS paidAt
+        FROM payments
+        WHERE user_id = #{userId}
+        ORDER BY paid_at DESC
+    </select>
+
 </mapper>

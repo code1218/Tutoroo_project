@@ -42,12 +42,27 @@
             point_balance = #{pointBalance},
             level = #{level},
             exp = #{exp},
+            age = #{age},
             current_streak = #{currentStreak},
             last_study_date = #{lastStudyDate},
             rival_id = #{rivalId},
             status = #{status},
             withdrawal_reason = #{withdrawalReason},
             deleted_at = #{deletedAt},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateUser" parameterType="com.tutoroo.entity.UserEntity">
+        UPDATE users
+        SET
+            password = #{password},
+            name = #{name},
+            email = #{email},
+            phone = #{phone},
+            parent_phone = #{parentPhone},
+            profile_image = #{profileImage},
+            age = #{age},
             updated_at = NOW()
         WHERE id = #{id}
     </update>

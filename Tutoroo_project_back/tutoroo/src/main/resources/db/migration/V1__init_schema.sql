@@ -67,6 +67,10 @@ CREATE TABLE IF NOT EXISTS `study_plans` (
     `end_date`          DATE,
     `progress_rate`     DOUBLE DEFAULT 0.0,
 
+    -- [필수 추가] 학습 난이도 및 목표 레벨 (Mapper와 연동)
+    `current_level`     VARCHAR(50) COMMENT '현재 실력 (예: BEGINNER)',
+    `target_level`      VARCHAR(50) COMMENT '목표 실력 (예: ADVANCED)',
+
     `is_paid`           BOOLEAN DEFAULT FALSE,
     `status`            VARCHAR(20) DEFAULT 'PROCEEDING', -- PROCEEDING, COMPLETED
 
@@ -222,6 +226,24 @@ CREATE TABLE IF NOT EXISTS `pet_skills` (
     `effect_value`  DOUBLE,
     `description`   VARCHAR(200),
     INDEX `idx_pet_skill_type` (`pet_type`, `skill_code`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- -----------------------------------------------------
+-- 11. 알림 (Notifications)
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `notifications` (
+                                               `id`            BIGINT AUTO_INCREMENT PRIMARY KEY,
+                                               `user_id`       BIGINT NOT NULL,
+                                               `title`         VARCHAR(100),
+    `message`       TEXT NOT NULL,
+    `type`          VARCHAR(20) DEFAULT 'INFO',
+    `is_read`       BOOLEAN DEFAULT FALSE,
+    `related_url`   VARCHAR(255),
+    `created_at`    DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    INDEX `idx_noti_user_read` (`user_id`, `is_read`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 

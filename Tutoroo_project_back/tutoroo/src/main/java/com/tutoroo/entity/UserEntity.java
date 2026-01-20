@@ -57,11 +57,11 @@ public class UserEntity {
     // 1. 이름 마스킹 (김철수 -> 김*수)
     public String getMaskedName() {
         if (name == null || name.length() < 2) return name;
+        if (name.length() == 2) return name.charAt(0) + "*";
         return name.charAt(0) + "*" + name.substring(2);
     }
 
     // 2. [중요] 유효 멤버십 조회 (Null-Safe)
-    // PetService에서 user.getEffectiveTier().getAllowedPets() 호출 시 사용됨
     public MembershipTier getEffectiveTier() {
         return this.membershipTier != null ? this.membershipTier : MembershipTier.BASIC;
     }

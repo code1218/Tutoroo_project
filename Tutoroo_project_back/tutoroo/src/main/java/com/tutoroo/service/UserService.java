@@ -1,5 +1,8 @@
 package com.tutoroo.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tutoroo.dto.RivalDTO;
+import com.tutoroo.dto.StudyDTO;
 import com.tutoroo.dto.UserDTO;
 import com.tutoroo.entity.StudyLogEntity;
 import com.tutoroo.entity.StudyPlanEntity;
@@ -9,7 +12,6 @@ import com.tutoroo.exception.TutorooException;
 import com.tutoroo.mapper.StudyMapper;
 import com.tutoroo.mapper.UserMapper;
 import com.tutoroo.util.FileStore;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -45,7 +47,7 @@ public class UserService {
         return UserDTO.ProfileInfo.builder()
                 .username(user.getUsername())
                 .name(user.getName())
-                .age(user.getAge()) // [New] 나이 매핑
+                .age(user.getAge())
                 .email(user.getEmail())
                 .phone(user.getPhone())
                 .profileImage(user.getProfileImage())
@@ -79,8 +81,8 @@ public class UserService {
         if (request.newPassword() != null && !request.newPassword().isBlank()) {
             user.setPassword(passwordEncoder.encode(request.newPassword()));
         }
-        if (request.name() != null && !request.name().isBlank()) user.setName(request.name()); // [New] 이름 수정
-        if (request.age() != null) user.setAge(request.age()); // [New] 나이 수정
+        if (request.name() != null && !request.name().isBlank()) user.setName(request.name());
+        if (request.age() != null) user.setAge(request.age());
         if (request.email() != null && !request.email().isBlank()) user.setEmail(request.email());
         if (request.phone() != null && !request.phone().isBlank()) user.setPhone(request.phone());
 
@@ -121,11 +123,75 @@ public class UserService {
                 .build();
     }
 
-    // --- [2] 대시보드 조회 ---
+    @Transactional(readOnly = true)
+    public RivalDTO.RivalComparisonResponse getRivalComparison(Long userId) {
+        UserEntity me = userMapper.findById(userId);
+        if (me == null) throw new TutorooException(ErrorCode.USER_NOT_FOUND);
+
+        // 1. 라이벌이 없는 경우
+        if (me.getRivalId() == null) {
+            return RivalDTO.RivalComparisonResponse.builder()
+                    .hasRival(false)
+                    .myProfile(toRivalProfile(me))
+                    .message("아직 라이벌이 없습니다. 매칭을 시작해보세요!")
+                    .pointGap(0)
+                    .build();
+        }
+
+        // 2. 라이벌 정보 조회
+        UserEntity rival = userMapper.findById(me.getRivalId());
+        // 라이벌이 탈퇴했을 경우 처리
+        if (rival == null || !"ACTIVE".equals(rival.getStatus())) {
+            return RivalDTO.RivalComparisonResponse.builder()
+                    .hasRival(false)
+                    .myProfile(toRivalProfile(me))
+                    .message("라이벌이 떠났습니다. 새로운 라이벌을 찾아보세요.")
+                    .pointGap(0)
+                    .build();
+        }
+
+        // 3. 비교 로직
+        int myScore = me.getTotalPoint();
+        int rivalScore = rival.getTotalPoint();
+        int gap = Math.abs(myScore - rivalScore);
+        String msg;
+
+        if (myScore > rivalScore) {
+            msg = String.format("훌륭해요! 라이벌보다 %d점 앞서고 있습니다. 🏆", gap);
+        } else if (myScore < rivalScore) {
+            msg = String.format("분발하세요! 라이벌이 %d점 차이로 앞서갑니다. 🔥", gap);
+        } else {
+            msg = "막상막하! 라이벌과 점수가 같습니다. 긴장하세요!";
+        }
+
+        return RivalDTO.RivalComparisonResponse.builder()
+                .hasRival(true)
+                .myProfile(toRivalProfile(me))
+                .rivalProfile(toRivalProfile(rival))
+                .message(msg)
+                .pointGap(gap)
+                .build();
+    }
+
+    // DTO 변환 헬퍼
+    private RivalDTO.RivalProfile toRivalProfile(UserEntity user) {
+        return RivalDTO.RivalProfile.builder()
+                .userId(user.getId())
+                .name(user.getMaskedName()) // 이름 마스킹
+                .profileImage(user.getProfileImage())
+                .totalPoint(user.getTotalPoint())
+                .rank(user.getDailyRank() != null ? user.getDailyRank() : 0) // 매일 갱신되는 랭킹 사용
+                .level(user.getLevel())
+                .tier(user.getEffectiveTier().name())
+                .build();
+    }
+
+    // --- [2] 대시보드 조회 (StudyList 추가됨) ---
     @Transactional(readOnly = true)
     public UserDTO.DashboardDTO getAdvancedDashboard(String username) {
         String cacheKey = "dashboard:" + username;
 
+        // 1. 캐시 조회
         try {
             String cachedJson = redisTemplate.opsForValue().get(cacheKey);
             if (cachedJson != null) {
@@ -138,7 +204,18 @@ public class UserService {
         UserEntity user = userMapper.findByUsername(username);
         if (user == null) throw new TutorooException(ErrorCode.USER_NOT_FOUND);
 
+        // 2. 학습 플랜 조회 및 DTO 매핑 [UPDATE: 프론트엔드 연동용]
         List<StudyPlanEntity> plans = studyMapper.findActivePlansByUserId(user.getId());
+
+        // [New] StudyList 매핑 로직 추가
+        List<StudyDTO.StudySimpleInfo> studyList = plans.stream()
+                .map(plan -> StudyDTO.StudySimpleInfo.builder()
+                        .id(plan.getId())
+                        .name(plan.getGoal())
+                        .tutor(plan.getCustomTutorName() != null ? plan.getCustomTutorName() : plan.getPersona())
+                        .build())
+                .collect(Collectors.toList());
+
         StudyPlanEntity currentPlan = plans.isEmpty() ? null : plans.get(0);
 
         String currentGoal = (currentPlan != null) ? currentPlan.getGoal() : "목표를 설정해주세요";
@@ -162,6 +239,7 @@ public class UserService {
             aiSuggestion = "지난번 점수는 " + lastLog.getTestScore() + "점이었네요. 오늘은 더 잘할 수 있어요!";
         }
 
+        // 3. DTO 빌드 (studyList 추가)
         UserDTO.DashboardDTO dashboardDTO = UserDTO.DashboardDTO.builder()
                 .name(user.getName())
                 .currentGoal(currentGoal)
@@ -171,8 +249,10 @@ public class UserService {
                 .aiAnalysisReport(aiAnalysis)
                 .aiSuggestion(aiSuggestion)
                 .weeklyScores(weeklyScores)
+                .studyList(studyList) // [New] 추가됨
                 .build();
 
+        // 4. 캐시 저장
         try {
             String json = objectMapper.writeValueAsString(dashboardDTO);
             redisTemplate.opsForValue().set(cacheKey, json, 10, TimeUnit.MINUTES);

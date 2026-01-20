@@ -15,7 +15,6 @@ public class StudyPlanEntity {
     private String goal;
 
     // 선생님 타입 (예: "TIGER", "KANGAROO")
-    // TeacherType 엔티티 없이 문자열로 관리하여 구조를 단순화
     private String persona;
 
     private String customTutorName; // 선생님 애칭
@@ -25,12 +24,17 @@ public class StudyPlanEntity {
     private LocalDate endDate;
     private double progressRate;
 
+    // [필수 추가] 레벨 기반 학습 로드맵 생성을 위한 필드
+    private String currentLevel;
+    private String targetLevel;
+
     private Boolean isPaid;
     private String status;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    // 편의 메서드: 남은 일수 계산
     public long getDaysRemaining() {
         if (endDate == null) return 0;
         long days = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), endDate);

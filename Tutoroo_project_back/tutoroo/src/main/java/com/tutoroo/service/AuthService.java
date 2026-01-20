@@ -5,18 +5,23 @@ import com.tutoroo.entity.MembershipTier;
 import com.tutoroo.entity.UserEntity;
 import com.tutoroo.exception.ErrorCode;
 import com.tutoroo.exception.TutorooException;
-import com.tutoroo.jwt.JwtTokenProvider;
+import com.tutoroo.jwt.JwtTokenProvider; // [수정] 패키지 경로 변경됨
 import com.tutoroo.mapper.UserMapper;
 import com.tutoroo.util.FileStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -29,29 +34,43 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final EmailService emailService;
-    private final FileStore fileStore; // [필수] 파일 저장소
+    private final FileStore fileStore;
     private final RedisTemplate<String, String> redisTemplate;
+    private final AuthenticationManagerBuilder authenticationManagerBuilder; // [추가] 정석적인 로그인 검증을 위해 필요
 
     // --- [1] 로그인 ---
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthDTO.LoginResponse login(AuthDTO.LoginRequest request) {
+        // 1. Login ID/PW 를 기반으로 AuthenticationToken 생성
+        UsernamePasswordAuthenticationToken authenticationToken =
+                new UsernamePasswordAuthenticationToken(request.username(), request.password());
+
+        // 2. 실제 검증 (UserDetailsService -> PasswordEncoder)
+        // 기존 코드처럼 수동으로 passwordEncoder.matches를 써도 되지만, AuthenticationManager를 쓰는 것이 보안 컨텍스트상 안전합니다.
+        // 하지만 님의 기존 로직(수동 체크 + 상태 확인)을 유지하면서 TokenProvider 메서드만 맞추겠습니다.
+
         UserEntity user = userMapper.findByUsername(request.username());
 
-        // 1. 유저 존재 여부 및 비밀번호 확인
+        // 유저 존재 여부 및 비밀번호 확인
         if (user == null || !passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new TutorooException(ErrorCode.INVALID_PASSWORD);
         }
 
-        // 2. 계정 상태 확인
+        // 계정 상태 확인
         if (!"ACTIVE".equals(user.getStatus())) {
             throw new TutorooException("비활성화된 계정입니다. 관리자에게 문의하세요.", ErrorCode.UNAUTHORIZED_ACCESS);
         }
 
-        // 3. 토큰 발급
-        String accessToken = jwtTokenProvider.createAccessToken(user.getUsername(), user.getRole());
-        String refreshToken = jwtTokenProvider.createRefreshToken(user.getUsername());
+        // 3. 토큰 발급 (Authentication 객체 생성 후 전달)
+        // JwtTokenProvider가 변경되었으므로 createAccessToken -> generateAccessToken으로 변경하고, 매개변수로 Authentication을 받습니다.
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                user.getUsername(), null, Collections.singletonList(new SimpleGrantedAuthority(user.getRole()))
+        );
 
-        // 4. 리프레시 토큰 Redis 저장 (유효기간 14일)
+        String accessToken = jwtTokenProvider.generateAccessToken(authentication);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(authentication);
+
+        // 4. 리프레시 토큰 Redis 저장 (유효기간 7일 ~ 14일)
         redisTemplate.opsForValue().set(
                 "RT:" + user.getUsername(),
                 refreshToken,
@@ -77,22 +96,19 @@ public class AuthService {
             throw new TutorooException(ErrorCode.DUPLICATE_ID);
         }
 
-        // 2. 프로필 이미지 저장 (FileStore 사용)
+        // 2. 프로필 이미지 저장 (FileStore 기존 로직 유지)
         String profileImageUrl = null;
         if (profileImage != null && !profileImage.isEmpty()) {
-            // "users" 라는 접두사를 붙여서 확장자 처리 등은 FileStore에 위임
-            // 여기서는 단순하게 byte[]를 넘김
             try {
-                // 원본 파일명에서 확장자 추출
                 String originalFilename = profileImage.getOriginalFilename();
                 String ext = (originalFilename != null && originalFilename.contains("."))
                         ? originalFilename.substring(originalFilename.lastIndexOf("."))
-                        : ".jpg"; // 기본값
+                        : ".jpg";
 
+                // [중요] 기존 FileStore가 byte[]를 받도록 되어 있으므로 유지
                 profileImageUrl = fileStore.storeFile(profileImage.getBytes(), ext);
             } catch (Exception e) {
                 log.error("프로필 이미지 저장 실패: {}", e.getMessage());
-                // 이미지는 선택사항이므로 실패해도 가입은 진행하되 경고 로그 남김 (혹은 에러 던지기 선택)
             }
         }
 
@@ -106,10 +122,10 @@ public class AuthService {
                 .phone(request.phone())
                 .email(request.email())
                 .parentPhone(request.parentPhone())
-                .profileImage(profileImageUrl) // URL 저장
+                .profileImage(profileImageUrl)
                 .role("ROLE_USER")
                 .status("ACTIVE")
-                .membershipTier(MembershipTier.BASIC) // 기본 등급
+                .membershipTier(MembershipTier.BASIC)
                 .totalPoint(0)
                 .pointBalance(0)
                 .level(1)
@@ -137,13 +153,14 @@ public class AuthService {
         user.setParentPhone(request.parentPhone());
         user.setRole("ROLE_USER"); // 정회원 전환
 
-        // 2. 프로필 이미지 업데이트 (업로드 된 경우만)
+        // 2. 프로필 이미지 업데이트
         if (profileImage != null && !profileImage.isEmpty()) {
             try {
                 String originalFilename = profileImage.getOriginalFilename();
                 String ext = (originalFilename != null && originalFilename.contains("."))
                         ? originalFilename.substring(originalFilename.lastIndexOf("."))
                         : ".jpg";
+
                 String imageUrl = fileStore.storeFile(profileImage.getBytes(), ext);
                 user.setProfileImage(imageUrl);
             } catch (Exception e) {
@@ -151,11 +168,16 @@ public class AuthService {
             }
         }
 
+        // [중요] 기존 Mapper 메서드명 유지 (update -> updateSocialUser)
         userMapper.updateSocialUser(user);
 
-        // 3. 토큰 발급 (정회원 권한으로)
-        String accessToken = jwtTokenProvider.createAccessToken(user.getUsername(), user.getRole());
-        String refreshToken = jwtTokenProvider.createRefreshToken(user.getUsername());
+        // 3. 토큰 발급
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                user.getUsername(), null, Collections.singletonList(new SimpleGrantedAuthority(user.getRole()))
+        );
+
+        String accessToken = jwtTokenProvider.generateAccessToken(authentication);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(authentication);
 
         redisTemplate.opsForValue().set("RT:" + user.getUsername(), refreshToken, 14, TimeUnit.DAYS);
 
@@ -178,6 +200,7 @@ public class AuthService {
     // --- [5] 아이디 찾기 ---
     @Transactional(readOnly = true)
     public AuthDTO.AccountInfoResponse findUsername(AuthDTO.FindIdRequest request) {
+        // [중요] 기존 Mapper 메서드명 유지
         UserEntity user = userMapper.findByNameAndEmailAndPhone(
                 request.name(), request.email(), request.phone());
 
@@ -197,7 +220,7 @@ public class AuthService {
         String tempPw = UUID.randomUUID().toString().substring(0, 8);
         userMapper.updatePassword(user.getId(), passwordEncoder.encode(tempPw));
 
-        // 이메일 전송 (비동기 권장되나 여기선 동기 처리)
+        // 기존 EmailService 사용
         emailService.sendTemporaryPassword(user.getEmail(), tempPw);
     }
 
@@ -212,6 +235,7 @@ public class AuthService {
     }
 
     // --- [9] 토큰 재발급 ---
+    @Transactional
     public AuthDTO.LoginResponse reissue(String refreshToken) {
         if (!jwtTokenProvider.validateToken(refreshToken)) {
             throw new TutorooException("유효하지 않은 리프레시 토큰입니다.", ErrorCode.INVALID_AUTH_CODE);
@@ -227,10 +251,14 @@ public class AuthService {
         UserEntity user = userMapper.findByUsername(username);
         if (user == null) throw new TutorooException(ErrorCode.USER_NOT_FOUND);
 
-        String newAccessToken = jwtTokenProvider.createAccessToken(user.getUsername(), user.getRole());
-        String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getUsername());
+        // 새 토큰 발급
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                user.getUsername(), null, Collections.singletonList(new SimpleGrantedAuthority(user.getRole()))
+        );
 
-        // Refresh Token Rotation (보안 강화: 재발급 시 RT도 갱신)
+        String newAccessToken = jwtTokenProvider.generateAccessToken(authentication);
+        String newRefreshToken = jwtTokenProvider.generateRefreshToken(authentication);
+
         redisTemplate.opsForValue().set("RT:" + username, newRefreshToken, 14, TimeUnit.DAYS);
 
         return AuthDTO.LoginResponse.builder()
@@ -241,5 +269,27 @@ public class AuthService {
                 .role(user.getRole())
                 .isNewUser(false)
                 .build();
+    }
+
+    // --- [10] 로그아웃 (New) ---
+    public void logout(String accessToken, String refreshToken) {
+        if (jwtTokenProvider.validateToken(accessToken)) {
+            redisTemplate.opsForValue().set(
+                    "BL:" + accessToken,
+                    "logout",
+                    30,
+                    TimeUnit.MINUTES
+            );
+        }
+        if (refreshToken != null) {
+            try {
+                String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
+                if (username != null) {
+                    redisTemplate.delete("RT:" + username);
+                }
+            } catch (Exception e) {
+                // 토큰 만료 등 파싱 에러 무시
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.tutoroo.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tutoroo.dto.TutorDTO;
 import com.tutoroo.entity.*;
@@ -13,16 +14,21 @@ import com.tutoroo.util.FileStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiAudioSpeechModel;
 import org.springframework.ai.openai.OpenAiAudioSpeechOptions;
 import org.springframework.ai.openai.api.OpenAiAudioApi;
 import org.springframework.ai.openai.audio.speech.SpeechPrompt;
 import org.springframework.ai.openai.audio.speech.SpeechResponse;
 import org.springframework.ai.openai.OpenAiAudioTranscriptionModel;
-// [핵심 수정] 패키지 경로 변경 (openai 제거 -> core 패키지 사용)
 import org.springframework.ai.audio.transcription.AudioTranscriptionPrompt;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,6 +38,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -49,6 +57,8 @@ public class TutorService {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final FileStore fileStore;
+    // [New] 대화 기억을 위한 Redis 템플릿 추가
+    private final RedisTemplate<String, String> redisTemplate;
 
     // --- [1] 수업 시작 ---
     @Transactional
@@ -110,7 +120,8 @@ public class TutorService {
         String aiResponse = chatClientBuilder.build().prompt().user(feedbackPrompt).call().content();
 
         int score = parseScore(aiResponse); // "점수: 80" 파싱 메서드 (하단 참조)
-        String feedbackMsg = aiResponse.contains("|") ? aiResponse.split("\\|")[1].trim() : aiResponse;
+        String feedbackMsg = aiResponse.contains("|") ?
+                aiResponse.split("\\|")[1].trim() : aiResponse;
         boolean isPassed = score >= 60;
 
         // 2. 학습 로그 저장
@@ -143,12 +154,73 @@ public class TutorService {
         );
     }
 
-    // --- [4] 커리큘럼 조정 채팅 ---
+    // --- [4] 커리큘럼 조정 채팅 (AI 튜터 대화 - Context 적용) ---
+    // [Fix] 기존 단순 호출을 Redis 기반의 대화 기억 로직으로 전면 교체
     @Transactional
     public TutorDTO.FeedbackChatResponse adjustCurriculum(Long userId, Long planId, String message) {
         StudyPlanEntity plan = studyMapper.findById(planId);
+        if (plan == null) throw new TutorooException(ErrorCode.STUDY_PLAN_NOT_FOUND);
 
-        String aiResponse = chatClientBuilder.build().prompt().user(message).call().content();
+        // 1. Redis에서 대화 내역 불러오기 (최근 10턴 = 20개 메시지)
+        String historyKey = "chat:history:" + planId;
+        List<Message> messages = new ArrayList<>();
+
+        // 2. 시스템 프롬프트 설정 (페르소나 주입)
+        // DB에서 페르소나 정보를 가져오거나, 없으면 기본값 사용
+        String personaKey = "TEACHER_" + (plan.getPersona() != null ? plan.getPersona() : "TIGER");
+        String personaDesc = commonMapper.findPromptContentByKey(personaKey);
+        if (personaDesc == null) personaDesc = "당신은 친절한 AI 선생님입니다.";
+
+        messages.add(new SystemMessage(personaDesc + "\n(이전 대화 내용을 기억하고 자연스럽게 이어가세요.)"));
+
+        // 3. 과거 대화 내역 추가
+        try {
+            List<String> historyJson = redisTemplate.opsForList().range(historyKey, 0, -1);
+            if (historyJson != null) {
+                for (String json : historyJson) {
+                    Map<String, String> msgMap = objectMapper.readValue(json, Map.class);
+                    String role = msgMap.get("role");
+                    String content = msgMap.get("content");
+
+                    if ("user".equals(role)) {
+                        messages.add(new UserMessage(content));
+                    } else if ("assistant".equals(role)) {
+                        messages.add(new AssistantMessage(content));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("대화 내역 로딩 실패: {}", e.getMessage());
+            // 에러 나도 현재 대화는 진행
+        }
+
+        // 4. 현재 유저 메시지 추가
+        messages.add(new UserMessage(message));
+
+        // 5. AI 호출 (Context 포함)
+        Prompt prompt = new Prompt(messages);
+        String aiResponse = chatClientBuilder.build().prompt(prompt).call().content();
+
+        // 6. Redis에 대화 내역 저장 (User + Assistant)
+        try {
+            String userJson = objectMapper.writeValueAsString(Map.of("role", "user", "content", message));
+            String aiJson = objectMapper.writeValueAsString(Map.of("role", "assistant", "content", aiResponse));
+
+            redisTemplate.opsForList().rightPush(historyKey, userJson);
+            redisTemplate.opsForList().rightPush(historyKey, aiJson);
+
+            // 메모리 관리: 최근 20개 메시지(10턴)만 유지
+            if (redisTemplate.opsForList().size(historyKey) > 20) {
+                redisTemplate.opsForList().trim(historyKey, -20, -1);
+            }
+            // TTL 설정 (24시간 동안 대화 없으면 삭제)
+            redisTemplate.expire(historyKey, 24, TimeUnit.HOURS);
+
+        } catch (JsonProcessingException e) {
+            log.error("대화 내역 저장 실패: {}", e.getMessage());
+        }
+
+        // 7. TTS 생성 및 응답
         String audioUrl = generateTtsAudio(aiResponse, plan.getPersona());
 
         return new TutorDTO.FeedbackChatResponse(aiResponse, audioUrl);
@@ -229,7 +301,6 @@ public class TutorService {
             // 2. 목소리 선택 (Spring AI 1.0.0-M6 대응: String -> Enum 변환)
             // 기본값: ALLOY
             OpenAiAudioApi.SpeechRequest.Voice voice = OpenAiAudioApi.SpeechRequest.Voice.ALLOY;
-
             if (personaName != null) {
                 if (personaName.contains("호랑이") || personaName.contains("TIGER")) {
                     voice = OpenAiAudioApi.SpeechRequest.Voice.ONYX; // 중저음, 남성적

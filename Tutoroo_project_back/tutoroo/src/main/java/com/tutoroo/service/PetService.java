@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -133,7 +134,6 @@ public class PetService {
                     throw new TutorooException(ErrorCode.INSUFFICIENT_POINTS);
                 }
                 userMapper.spendPoints(userId, COST_FEED);
-
                 pet.setFullness(Math.min(100, pet.getFullness() + 30));
                 pet.setExp(pet.getExp() + EXP_FEED);
                 pet.setLastFedAt(LocalDateTime.now());
@@ -155,12 +155,11 @@ public class PetService {
                 pet.setLastCleanedAt(LocalDateTime.now());
             }
             case "SLEEP" -> {
-                pet.setSleeping(true); // [수정됨] setIsSleeping -> setSleeping
+                pet.setSleeping(true);
                 pet.setLastSleptAt(LocalDateTime.now());
             }
             case "WAKE_UP" -> {
-                pet.setSleeping(false); // [수정됨] setIsSleeping -> setSleeping
-
+                pet.setSleeping(false);
                 long sleptHours = Duration.between(pet.getLastSleptAt(), LocalDateTime.now()).toHours();
                 int recovery = (int) (sleptHours * 10) + 20;
                 pet.setEnergy(Math.min(100, pet.getEnergy() + recovery));
@@ -233,7 +232,6 @@ public class PetService {
                             .withHeight(1024)
                             .withWidth(1024)
                             .build()));
-
             String imageUrl = imageResponse.getResult().getOutput().getUrl();
 
             String diaryContent = content + "\n\n![그림일기](" + imageUrl + ")";
@@ -255,31 +253,109 @@ public class PetService {
         }
     }
 
-    // --- [7] 졸업 후 알 관련 ---
+    // --- [7] 졸업 후 알 관련 (구현 완료) ---
+    @Transactional(readOnly = true)
     public PetDTO.RandomEggResponse getGraduationEggs(Long userId) {
-        return null;
+        // 1. 유저 정보 및 현재 펫 상태 확인
+        UserEntity user = userMapper.findById(userId);
+        PetInfoEntity currentPet = petMapper.findByUserId(userId);
+
+        // 현재 키우고 있는 펫이 없거나, 졸업 상태가 아니라면 알을 받을 수 없음
+        // 단, '졸업 직후'에는 status가 GRADUATED로 바뀌어 있어 findByUserId(Active)가 null일 수 있으므로 로직 주의
+        // 여기서는 "현재 Active 펫이 없어야 알 선택 가능" 정책을 따름
+        if (currentPet != null) {
+            throw new TutorooException("아직 육성 중인 펫이 있습니다. 펫이 졸업해야 새로운 알을 받을 수 있습니다.", ErrorCode.ALREADY_HAS_PET);
+        }
+
+        // 2. 멤버십에 따른 알 개수 및 후보군 조회
+        MembershipTier tier = user.getEffectiveTier();
+        int eggCount = tier.getGraduationEggCount();
+        Set<PetType> allowedPets = tier.getAllowedPets();
+
+        // 3. 랜덤으로 후보 선출
+        List<PetType> allCandidates = new ArrayList<>(allowedPets);
+        Collections.shuffle(allCandidates);
+        List<PetDTO.PetSummary> selectedCandidates = allCandidates.stream()
+                .limit(Math.min(eggCount, allCandidates.size()))
+                .map(type -> new PetDTO.PetSummary(type.name(), type.getName(), type.getDescription()))
+                .toList();
+
+        return PetDTO.RandomEggResponse.builder()
+                .candidates(selectedCandidates)
+                .choiceCount(1) // 사용자는 제시된 알 중 1개를 선택 가능
+                .build();
     }
 
+    @Transactional
     public void hatchEgg(Long userId, String selectedPetType) {
-        // 부화 로직
+        // 1. 이미 Active 펫이 있는지 확인 (중복 방지)
+        if (petMapper.findByUserId(userId) != null) {
+            throw new TutorooException(ErrorCode.ALREADY_HAS_PET);
+        }
+
+        // 2. 펫 타입 검증
+        PetType type;
+        try {
+            type = PetType.valueOf(selectedPetType);
+        } catch (IllegalArgumentException e) {
+            throw new TutorooException(ErrorCode.INVALID_PET_TYPE);
+        }
+
+        // 3. 멤버십 권한 검증 (선택한 펫이 현재 등급에서 허용되는지)
+        UserEntity user = userMapper.findById(userId);
+        if (!user.getEffectiveTier().getAllowedPets().contains(type)) {
+            throw new TutorooException(ErrorCode.MEMBERSHIP_PET_RESTRICTION);
+        }
+
+        // 4. 새로운 펫 생성 (초기화)
+        PetInfoEntity newPet = PetInfoEntity.builder()
+                .userId(userId)
+                .petName(type.getName()) // 초기 이름은 종 이름으로 설정
+                .petType(type.name())
+                .stage(1) // 알 단계부터 시작
+                .status("ACTIVE")
+                .fullness(80)
+                .intimacy(80)
+                .exp(0)
+                .cleanliness(100)
+                .stress(0)
+                .energy(100)
+                .isSleeping(false)
+                .createdAt(LocalDateTime.now())
+                .lastFedAt(LocalDateTime.now())
+                .lastPlayedAt(LocalDateTime.now())
+                .lastCleanedAt(LocalDateTime.now())
+                .lastSleptAt(LocalDateTime.now())
+                .build();
+
+        petMapper.createPet(newPet);
+        log.info("🥚 새로운 알 부화 완료! User: {}, Pet: {}", userId, type);
     }
+
 
     // --- 내부 메서드 ---
 
     private void checkLevelUp(PetInfoEntity pet) {
         int required = petMapper.findRequiredExpForNextStage(pet.getStage());
+
+        // 일반 성장 (1단계 -> 4단계)
         if (pet.getExp() >= required && pet.getStage() < 5) {
             pet.setStage(pet.getStage() + 1);
             pet.setExp(pet.getExp() - required);
             log.info("🎉 펫 진화! UserId: {}, NewStage: {}", pet.getUserId(), pet.getStage());
-        } else if (pet.getStage() == 5 && pet.getExp() >= required) {
+        }
+        // 졸업 조건 달성 (5단계에서 경험치 충족)
+        else if (pet.getStage() == 5 && pet.getExp() >= required) {
             pet.setStatus("GRADUATED");
+            pet.setExp(pet.getExp() - required); // 경험치 정리
+            log.info("🎓 펫 졸업 달성! UserId: {}, PetId: {}", pet.getUserId(), pet.getPetId());
+
+            // 졸업 보상 지급 (예: 알 포인트 등) 로직을 여기에 추가 가능
         }
     }
 
     private void updatePetStats(PetInfoEntity pet) {
         LocalDateTime now = LocalDateTime.now();
-
         long hFed = Duration.between(pet.getLastFedAt(), now).toHours();
         if(hFed > 0) pet.setFullness(Math.max(0, pet.getFullness() - (int)hFed * FULLNESS_DECAY_PER_HOUR));
 
@@ -308,7 +384,7 @@ public class PetService {
 
     private String generateRandomMessage(PetInfoEntity pet) {
         if (pet.isSleeping()) return "Zzz... (세상 모르게 자고 있다)";
-        if ("GRADUATED".equals(pet.getStatus())) return "당신 덕분에 훌륭하게 자랐어요!";
+        if ("GRADUATED".equals(pet.getStatus())) return "당신 덕분에 훌륭하게 자랐어요! 이제 넓은 세상으로 떠날게요.";
         if (pet.getFullness() < 30) return "배가 고파요... 밥 주세요.";
         if (pet.getIntimacy() < 30) return "심심해요. 놀아주세요.";
         return "오늘도 기분 좋은 하루예요!";

@@ -1,8 +1,11 @@
 package com.tutoroo.controller;
 
+import com.tutoroo.dto.RivalDTO;
 import com.tutoroo.dto.UserDTO;
 import com.tutoroo.security.CustomUserDetails;
 import com.tutoroo.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -13,24 +16,28 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
+@Tag(name = "User", description = "회원 정보 및 라이벌 관리")
 public class UserController {
 
     private final UserService userService;
 
-    // 1. 회원 상세 정보 조회 (수정 화면 진입 시 "Before" 정보 표시용)
+    // 1. 회원 상세 정보 조회
     @GetMapping("/profile")
+    @Operation(summary = "프로필 정보 조회", description = "마이페이지 수정 화면 진입 시 사용합니다.")
     public ResponseEntity<UserDTO.ProfileInfo> getProfileInfo(@AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok(userService.getProfileInfo(user.getUsername()));
     }
 
     // 2. 대시보드 조회
     @GetMapping("/dashboard")
+    @Operation(summary = "대시보드 조회", description = "메인 화면의 학습 현황 및 요약 정보를 반환합니다.")
     public ResponseEntity<UserDTO.DashboardDTO> getDashboard(@AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok(userService.getAdvancedDashboard(user.getUsername()));
     }
 
-    // 3. 회원 정보 수정 (이미지 포함) -> 결과로 "Before" & "After" 반환
+    // 3. 회원 정보 수정
     @PatchMapping(value = "/update", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "회원 정보 수정", description = "프로필 이미지 및 개인정보를 수정합니다.")
     public ResponseEntity<UserDTO.UpdateResponse> updateUserInfo(
             @AuthenticationPrincipal CustomUserDetails user,
             @RequestPart(value = "data") UserDTO.UpdateRequest request,
@@ -42,13 +49,22 @@ public class UserController {
 
     // 4. 라이벌 매칭 요청
     @PostMapping("/match-rival")
+    @Operation(summary = "라이벌 매칭 요청", description = "비슷한 점수대의 유저를 찾아 라이벌로 등록합니다.")
     public ResponseEntity<String> matchRival(@AuthenticationPrincipal CustomUserDetails user) {
         String result = userService.matchRival(user.getId());
         return ResponseEntity.ok(result);
     }
 
-    // 5. 회원 탈퇴 요청
+    // 5. [New] 라이벌 상세 조회 (비교)
+    @GetMapping("/rival")
+    @Operation(summary = "라이벌 현황 조회", description = "나와 라이벌의 점수 및 랭킹을 비교합니다.")
+    public ResponseEntity<RivalDTO.RivalComparisonResponse> getRivalComparison(@AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok(userService.getRivalComparison(user.getId()));
+    }
+
+    // 6. 회원 탈퇴 요청
     @PostMapping("/withdraw")
+    @Operation(summary = "회원 탈퇴", description = "계정을 비활성화하고 90일 후 영구 삭제합니다.")
     public ResponseEntity<String> withdraw(
             @AuthenticationPrincipal CustomUserDetails user,
             @RequestBody UserDTO.WithdrawRequest request) {
@@ -57,8 +73,9 @@ public class UserController {
         return ResponseEntity.ok("회원 탈퇴 처리가 완료되었습니다. 90일 후 데이터가 영구 삭제됩니다.");
     }
 
-    // 6. 비밀번호 검증 API (수정 화면 진입 전 보안 확인)
+    // 7. 비밀번호 검증 API
     @PostMapping("/verify-password")
+    @Operation(summary = "비밀번호 검증", description = "중요 정보 수정 전 비밀번호를 재확인합니다.")
     public ResponseEntity<String> verifyPassword(
             @AuthenticationPrincipal CustomUserDetails user,
             @RequestBody UserDTO.PasswordVerifyRequest request) {
