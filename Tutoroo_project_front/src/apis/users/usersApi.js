@@ -1,3 +1,5 @@
+import axios from "axios";
+import { reasonBox } from "../../pages/mypage/styles";
 import { api } from "../configs/axiosConfig";
 
 export const authApi = {
@@ -62,5 +64,32 @@ export const userApi = {
   getDashboard: async () => {
     const res = await api.get("/api/user/dashboard");
     return res.data;
+  },
+
+  // --------------------------------------------
+  // mypage api
+
+  getProfile: async() => {
+    const res = await api.get("/api/user/profile");
+    return res.data;
+  },
+
+  updateProfile: async({data, profileImage}) => {
+    const formData = new FormData();
+    formData.append(
+      "data",
+      new Blob([JSON.stringify(data)], {type: "application/json"})
+    );
+
+    if (profileImage) {
+      formData.append("image", profileImage);
+    }
+
+    const res = await api.patch("/api/user/update", formData);
+    return res.data;
+  },
+
+  withdraw: async(password, reason) => {
+    const res = await axios.post("/api/user/withdraw", { password, reason });
   },
 };

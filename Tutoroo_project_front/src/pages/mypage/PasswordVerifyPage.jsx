@@ -5,22 +5,46 @@ import { useState } from "react";
 import Header from "../../components/layouts/Header";
 import { useNavigate } from "react-router-dom";
 import logoImg from "../../assets/images/mascots/logo.jpg";
+import axios from "axios";
+import Swal from "sweetalert2";
+import { api } from "../../apis/configs/axiosConfig";
 
 function PasswordVerifyPage() {
     const [ password, setPassword ] = useState("");
     const navigate = useNavigate();
 
-    const onClickHandleConfirm = () => {
-        // if (!password) {
-        //     alert("비밀번호를 확인해주세요.")
-        //     return;
-        // }
-
-        if (password.trim() === "") { //임시 데이터
-            alert("비밀번호를 입력해주세요.");
+    const onClickHandleConfirm = async() => {
+        if (password.trim() === "") {
+            Swal.fire("입력 오류", "비밀번호를 입력해주세요.", "warning");
             return;
         }
-        navigate("/mypage/changeinfo"); //임시 변환
+
+        try {
+            await api.post("/api/user/verify-password", {
+                password: password
+            });
+
+            Swal.fire({
+                icon: 'success',
+                title: '인증 성공',
+                text: '비밀번호가 확인되었습니다.',
+                confirmButtonColor: '#3085d6', // 버튼 색상 (선택사항)
+                confirmButtonText: '확인'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    navigate("/mypage/changeinfo");
+                }
+            });
+        } catch (error) {
+            console.error(error);
+            Swal.fire({
+                icon: 'error',
+                title: '인증 실패',
+                text: '비밀번호가 일치하지 않습니다.',
+                confirmButtonColor: '#d33'
+            });
+            setPassword("");
+        }
     }
 
     const handleKeyPress = (e) => {
@@ -44,7 +68,12 @@ function PasswordVerifyPage() {
                 </p>
                 <div css={s.inputGroup}>
                     <label>비밀번호 확인</label>
-                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={handleKeyPress} placeholder="비밀번호를 입력해주세요" />
+                    <input 
+                        type="password" 
+                        value={password} 
+                        onChange={(e) => setPassword(e.target.value)} 
+                        onKeyDown={handleKeyPress} 
+                        placeholder="비밀번호를 입력해주세요" />
                 </div>
                 <button css={s.submitBtn} onClick={onClickHandleConfirm}>확인</button>
             </div>

@@ -262,6 +262,10 @@ export const uploadPlaceholder = css`
         cursor: pointer;
         color: #333;
     }
+
+    input {
+        
+    }
 `;
 
 /* [회원탈퇴] 경고 박스 */
