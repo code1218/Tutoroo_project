@@ -4,17 +4,18 @@ SET FOREIGN_KEY_CHECKS = 0; -- 초기화 시 외래키 제약 임시 해제
 -- -----------------------------------------------------
 -- 1. 사용자 (Users)
 -- [매핑]: UserEntity.java
+-- [수정]: username(100), profile_image(512) 길이 확장 (OAuth2 안전성 확보)
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `users` (
                                        `id`                BIGINT AUTO_INCREMENT PRIMARY KEY,
-                                       `username`          VARCHAR(50) NOT NULL UNIQUE COMMENT '로그인 아이디',
+                                       `username`          VARCHAR(100) NOT NULL UNIQUE COMMENT '로그인 아이디 (OAuth2 ID 포함)',
     `password`          VARCHAR(255) NOT NULL,
     `name`              VARCHAR(50),
     `gender`            VARCHAR(10),
     `age`               INT,
     `phone`             VARCHAR(20),
     `email`             VARCHAR(100) UNIQUE,
-    `profile_image`     VARCHAR(255),
+    `profile_image`     VARCHAR(512) COMMENT 'URL 길이가 길어질 수 있음',
 
     -- 학부모 알림용
     `parent_phone`      VARCHAR(20),
@@ -49,17 +50,17 @@ CREATE TABLE IF NOT EXISTS `users` (
     INDEX `idx_users_total_point` (`total_point` DESC) -- 랭킹 조회 속도 최적화
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-
 -- -----------------------------------------------------
 -- 2. 학습 플랜 (Study Plans)
 -- [매핑]: StudyPlanEntity.java
+-- [수정]: goal 컬럼 TEXT로 변경 (긴 목표 수용)
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `study_plans` (
                                              `id`                BIGINT AUTO_INCREMENT PRIMARY KEY,
                                              `user_id`           BIGINT NOT NULL,
-                                             `goal`              VARCHAR(255) NOT NULL,
+                                             `goal`              TEXT NOT NULL COMMENT '학습 목표 (길이 제한 완화)',
 
-    `persona`           VARCHAR(50) COMMENT '선생님 타입 (TIGER, RABBIT 등)',
+                                             `persona`           VARCHAR(50) COMMENT '선생님 타입 (TIGER, RABBIT 등)',
     `custom_tutor_name` VARCHAR(50) COMMENT '선생님 애칭',
 
     `roadmap_json`      LONGTEXT COMMENT 'JSON: 전체 커리큘럼 데이터',
@@ -79,7 +80,6 @@ CREATE TABLE IF NOT EXISTS `study_plans` (
 
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 
 -- -----------------------------------------------------
 -- 3. 학습 로그 (Study Logs)
@@ -104,7 +104,6 @@ CREATE TABLE IF NOT EXISTS `study_logs` (
                                             FOREIGN KEY (`plan_id`) REFERENCES `study_plans`(`id`) ON DELETE CASCADE,
     INDEX `idx_study_logs_plan_day` (`plan_id`, `day_count`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 
 -- -----------------------------------------------------
 -- 4. 펫 정보 (Pet Info)
@@ -140,7 +139,6 @@ CREATE TABLE IF NOT EXISTS `pet_info` (
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-
 -- -----------------------------------------------------
 -- 5. 펫 다이어리 (Pet Diary)
 -- [매핑]: PetDiaryEntity.java
@@ -155,7 +153,6 @@ CREATE TABLE IF NOT EXISTS `pet_diary` (
 
     FOREIGN KEY (`pet_id`) REFERENCES `pet_info`(`pet_id`) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 
 -- -----------------------------------------------------
 -- 6. 결제 내역 (Payments)
@@ -180,7 +177,6 @@ CREATE TABLE IF NOT EXISTS `payments` (
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-
 -- -----------------------------------------------------
 -- 7. TTS 캐시 (TTS Cache)
 -- [매핑]: TtsCacheEntity.java
@@ -193,7 +189,6 @@ CREATE TABLE IF NOT EXISTS `tts_cache` (
     INDEX `idx_tts_hash` (`text_hash`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-
 -- -----------------------------------------------------
 -- 8. 프롬프트 관리 (Prompts) - 시스템용
 -- [매핑]: PromptEntity.java
@@ -203,7 +198,6 @@ CREATE TABLE IF NOT EXISTS `prompts` (
     `content`       TEXT NOT NULL,
     `description`   VARCHAR(255)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 
 -- -----------------------------------------------------
 -- 9. 펫 성장 규칙 (초기 데이터)
@@ -228,7 +222,6 @@ CREATE TABLE IF NOT EXISTS `pet_skills` (
     INDEX `idx_pet_skill_type` (`pet_type`, `skill_code`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-
 -- -----------------------------------------------------
 -- 11. 알림 (Notifications)
 -- -----------------------------------------------------
@@ -245,7 +238,6 @@ CREATE TABLE IF NOT EXISTS `notifications` (
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
     INDEX `idx_noti_user_read` (`user_id`, `is_read`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 
 -- =====================================================
 -- [DATA SEEDING] 초기 필수 데이터 삽입

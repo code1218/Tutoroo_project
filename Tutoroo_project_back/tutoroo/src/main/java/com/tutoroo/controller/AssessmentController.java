@@ -1,6 +1,8 @@
 package com.tutoroo.controller;
 
 import com.tutoroo.dto.AssessmentDTO;
+import com.tutoroo.exception.ErrorCode;
+import com.tutoroo.exception.TutorooException;
 import com.tutoroo.security.CustomUserDetails;
 import com.tutoroo.service.AssessmentService;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ public class AssessmentController {
      * [Step 2] 수준 파악 상담 진행
      * 설명: 사용자가 입력한 목표(Goal)에 대해 AI가 심층 질문을 던져 수준을 파악합니다.
      * 흐름: 프론트엔드는 isFinished=true가 올 때까지 이 API를 반복 호출해야 합니다.
+     * (참고: 상담은 로그인 없이도 가능하게 할지, 필수인지 기획에 따라 다르지만 여기선 체크하지 않음)
      */
     @PostMapping("/consult")
     public ResponseEntity<AssessmentDTO.ConsultResponse> consult(
@@ -36,6 +39,7 @@ public class AssessmentController {
             @AuthenticationPrincipal CustomUserDetails user,
             @RequestBody AssessmentDTO.AssessmentSubmitRequest request
     ) {
+        if (user == null) throw new TutorooException(ErrorCode.UNAUTHORIZED_ACCESS);
         return ResponseEntity.ok(assessmentService.analyzeAndCreateRoadmap(user.getId(), request));
     }
 
@@ -53,6 +57,7 @@ public class AssessmentController {
             @AuthenticationPrincipal CustomUserDetails user,
             @RequestBody AssessmentDTO.TestSubmitRequest request
     ) {
+        if (user == null) throw new TutorooException(ErrorCode.UNAUTHORIZED_ACCESS);
         return ResponseEntity.ok(assessmentService.evaluateLevelTest(user.getId(), request));
     }
 
@@ -62,6 +67,7 @@ public class AssessmentController {
             @RequestParam Long planId,
             @RequestBody AssessmentDTO.AssessmentSubmitRequest request
     ) {
+        if (user == null) throw new TutorooException(ErrorCode.UNAUTHORIZED_ACCESS);
         return ResponseEntity.ok(assessmentService.regenerateRoadmap(user.getId(), planId, request));
     }
 }

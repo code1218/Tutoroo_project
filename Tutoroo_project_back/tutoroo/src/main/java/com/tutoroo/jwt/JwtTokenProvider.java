@@ -1,5 +1,6 @@
 package com.tutoroo.jwt;
 
+import com.tutoroo.security.CustomUserDetailsService;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -11,14 +12,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Date;
 import java.util.stream.Collectors;
 
@@ -29,6 +26,9 @@ public class JwtTokenProvider {
 
     @Value("${jwt.secret}")
     private String secretKey;
+
+    // [핵심 변경] DB에서 진짜 유저 정보를 가져오기 위해 서비스 주입 (Lombok이 생성자 주입 처리)
+    private final CustomUserDetailsService customUserDetailsService;
 
     private Key key;
 
@@ -57,7 +57,7 @@ public class JwtTokenProvider {
         Date accessTokenExpiresIn = new Date(now + ACCESS_TOKEN_EXPIRE_TIME);
 
         return Jwts.builder()
-                .setSubject(authentication.getName())       // payload "sub": "name"
+                .setSubject(authentication.getName())       // payload "sub": "username"
                 .claim(AUTHORITIES_KEY, authorities)        // payload "auth": "ROLE_USER"
                 .setExpiration(accessTokenExpiresIn)        // payload "exp"
                 .signWith(key, SignatureAlgorithm.HS512)    // header "alg": "HS512"
@@ -77,21 +77,25 @@ public class JwtTokenProvider {
 
     /**
      * 2. 토큰에서 인증 정보(Authentication) 추출
+     * [수정됨] 기존: new User(...) -> 수정: customUserDetailsService.loadUserByUsername(...)
      */
     public Authentication getAuthentication(String accessToken) {
+        // 토큰 복호화
         Claims claims = parseClaims(accessToken);
 
         if (claims.get(AUTHORITIES_KEY) == null) {
             throw new RuntimeException("권한 정보가 없는 토큰입니다.");
         }
 
-        Collection<? extends GrantedAuthority> authorities =
-                Arrays.stream(claims.get(AUTHORITIES_KEY).toString().split(","))
-                        .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toList());
+        // 1. 토큰에서 사용자 아이디(username) 추출
+        String username = claims.getSubject();
 
-        UserDetails principal = new User(claims.getSubject(), "", authorities);
-        return new UsernamePasswordAuthenticationToken(principal, "", authorities);
+        // 2. [중요] DB에서 진짜 유저 정보(CustomUserDetails)를 조회
+        // 이 과정이 있어야 컨트롤러에서 @AuthenticationPrincipal CustomUserDetails user를 받을 수 있음
+        UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
+
+        // 3. 조회된 UserDetails로 인증 객체 생성
+        return new UsernamePasswordAuthenticationToken(userDetails, "", userDetails.getAuthorities());
     }
 
     /**
