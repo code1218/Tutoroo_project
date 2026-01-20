@@ -18,11 +18,11 @@ import java.util.Random;
 /**
  * [기능: 초기 테스트 데이터 생성기]
  * 설명: 서버 실행 시 테스트용 유저 데이터를 DB와 Redis에 적재합니다.
- * 변경사항: 기존 데이터가 있어도 멈추지 않고, 없는 유저만 골라서 채워 넣습니다.
+ * 변경: 주석 처리된 @Component와 @Profile을 활성화하여 로컬 환경에서 동작하도록 수정했습니다.
  */
 @Slf4j
-//@Component
-//@Profile("local") // 개발자님 환경에 맞춰 설정 (필요 없다면 이 줄 삭제 가능)
+//@Component // [수정] Bean 등록을 위해 주석 해제
+//@Profile("local") // [수정] local 프로필에서만 동작하도록 주석 해제
 @RequiredArgsConstructor
 public class DataLoader implements CommandLineRunner {
 
@@ -39,13 +39,12 @@ public class DataLoader implements CommandLineRunner {
         String commonPassword = passwordEncoder.encode("1234"); // 모든 테스트 계정 비번: 1234
         int createdCount = 0;
 
-        // user1 ~ user100 까지 순회하며 검사
+        // user1 ~ user100 까지 순회하며 검사 및 생성
         for (int i = 1; i <= 100; i++) {
             String username = "user" + i;
 
-            // [핵심 변경] 해당 유저가 이미 존재하는지 개별 체크
+            // [핵심 로직] 해당 유저가 이미 존재하는지 개별 체크 (중복 생성 방지)
             if (userMapper.findByUsername(username) != null) {
-                // 이미 있으면 건너뜀 (중복 생성 방지)
                 continue;
             }
 
@@ -53,11 +52,11 @@ public class DataLoader implements CommandLineRunner {
             String name = "학생" + i;
 
             // 랜덤 데이터 생성
-            int randomPoint = random.nextInt(5001); // 0 ~ 5000
-            int randomAge = 1 + random.nextInt(100); // 1 ~ 100세
+            int randomPoint = random.nextInt(5001); // 0 ~ 5000점
+            int randomAge = 8 + random.nextInt(12); // 8 ~ 19세 (주로 학생층)
             String gender = (i % 2 == 0) ? "MALE" : "FEMALE";
 
-            // 등급 랜덤 배정
+            // 멤버십 등급 랜덤 배정 (가중치 적용: Basic 60%, Standard 30%, Premium 10%)
             int tierRoll = random.nextInt(100);
             MembershipTier tier;
             if (tierRoll < 60) tier = MembershipTier.BASIC;
