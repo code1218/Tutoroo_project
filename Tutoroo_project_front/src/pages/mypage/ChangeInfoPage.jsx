@@ -6,6 +6,8 @@ import { FaCamera } from "react-icons/fa";
 import { BsPersonCircle } from "react-icons/bs";
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
+import { userApi } from "../../apis/users/usersApi";
+import Swal from "sweetalert2";
 
  function ChangeInfoPage() {
     const [ profile, setProfile ] = useState({
@@ -17,28 +19,90 @@ import axios from "axios";
     });
     
     const [ imageFile, setImageFile] = useState(null);
-    const [ previewUrl, setpriviewUrl ] = useState("");
+    const [ previewUrl, setPreviewUrl ] = useState(""); // 기존 프로필 설정
 
     const fileInputRef = useRef(null);
 
     useEffect(() => {
-        const fetchUseData = async() => {
-            const token = localStorage.getItem("accessToken");
+        const fetchUserData = async() => {
+            try {
 
-            if (!token) return;
-            
+                const data = await userApi.getProfile();
+                if (!data) return;
+                console.log("서버에서 온 데이터:", data)
+
+                setProfile({
+                    name: data.name,
+                    phone: data.phone,
+                    age: data.age,
+                    email: data.email,
+                });
+
+                if (data.profileImage) {
+                setPreviewUrl(data.profileImage);
+                }
+            } catch (error) {
+                console.error("프로필 로딩 실패", error);
+            }
         }
-    })
+        fetchUserData();
+    }, []);
 
     const handleImageChange = (e) => {
-        const file = e.target.file[0];
+        const file = e.target.files[0];
         if (file) {
             setImageFile(File);
             const reader = new FileReader();
             reader.onloadend = () => {
-                setpriviewUrl(reader.result);
+                setPreviewUrl(reader.result);
             };
             reader.readAsDataURL(file);
+        }
+    }
+
+    const handleSubmit = async () => {
+        try {
+        //    const { value: currentPassword } = await Swal.fire({
+        //         title: '본인 확인',
+        //         input: 'password',
+        //         inputLabel: '정보를 수정하려면 현재 비밀번호를 입력하세요',
+        //         inputPlaceholder: '비밀번호 입력',
+        //         showCancelButton: true
+        //     });
+        //         if (!currentPassword) return;
+                    
+            const updateData = {
+                currentPassword: "",
+                name: profile.name || "",
+                age: profile.age === "" ? null : parseInt(profile.age),
+                email: profile.email || "",
+                phone: profile.phone || "" 
+            };
+            
+           console.log("전송 데이터:", updateData);
+            console.log("전송 이미지:", imageFile);
+
+            
+            const resp = await userApi.updateProfile({ data: updateData, profileImage: imageFile });
+            
+            console.log("서버 응답:", resp);
+
+            
+            Swal.fire("성공", response.message || "회원 정보가 수정되었습니다.", "success");
+            
+           
+            if(resp.after) {
+                 setProfile({
+                    name: response.after.name,
+                    phone: response.after.phone,
+                    age: response.after.age,
+                    email: response.after.email
+                });
+                setPreviewUrl(resp.after.profileImage);
+            }
+
+        } catch (error) {
+            Swal.fire ("실패", "정보 수정이 실패했습니다", "error");
         }
     }
 
@@ -56,11 +120,11 @@ import axios from "axios";
                                     <BsPersonCircle size={40} color="#ccc"/>
                                     프로필 이미지 수정
                                 </div>
-                                <div css={s.imageUploadBox}>
+                                <div css={s.imageUploadBox} onClick={() => fileInputRef.current.click()}>
                                     <div css={s.uploadPlaceholder}>
                                         <FaCamera size={30} />
                                         <p style={{fontSize:'16px'}}>이미지 드래그 또는 선택</p>
-                                        <button type="button">파일 선택</button>
+                                        <input css={s.commonInputGroup} type="file" ref={fileInputRef} style={{display: 'none'}} accept="image/*" onChange={handleImageChange}/>
                                     </div>
                                 </div>
                             </div>
@@ -83,7 +147,7 @@ import axios from "axios";
                             </div>
                         </div>
 
-                        <button css={s.actionBtn}>변경하기</button>
+                        <button css={s.actionBtn} onClick={handleSubmit}>변경하기</button>
                     </div>
 
                 </main>
