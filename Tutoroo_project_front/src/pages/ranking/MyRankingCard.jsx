@@ -13,7 +13,7 @@ function MyRankingCard({ myRanking }) {
   };
 
   const finalImageUrl = getImageUrl(myRanking?.profileImage);
-
+  
   return (
     <aside css={s.myStatusArea}>
       <div css={s.statusCard}>
@@ -28,7 +28,7 @@ function MyRankingCard({ myRanking }) {
               </span>
             </div>
             <span css={s.cardLabel}>
-              현재 순위 / 포인트
+              현재 순위 / 포인트 
             </span>
 
             <div css={s.bigPoint}>
