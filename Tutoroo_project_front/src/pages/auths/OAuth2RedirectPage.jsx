@@ -7,39 +7,46 @@ import { userApi } from "../../apis/users/usersApi";
 function OAuth2RedirectPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+
   const login = useAuthStore((s) => s.login);
-  const openSocialSignup = useModalStore((s) => s.openSocialSignup);
+
+  const closeLogin = useModalStore((s) => s.closeLogin);
+  const closeAll = useModalStore((s) => s.closeAll);
+  const openSocialSignup = useModalStore((s) => s.openSocialSignup); // 너가 추가해둔 액션
 
   useEffect(() => {
-    const run = async () => {
+    (async () => {
       const accessToken = params.get("accessToken");
       const refreshToken = params.get("refreshToken");
       const isNewUser = params.get("isNewUser") === "true";
 
       if (!accessToken) {
-        navigate("/"); // 실패 케이스
+        navigate("/");
         return;
       }
 
-      //  authStore에 저장 (기존 login이 토큰+유저 저장하는 구조라면 그대로)
-      login({ accessToken, refreshToken, isNewUser });
+      // 1) 토큰 먼저 저장
+      login({ accessToken, refreshToken });
 
+      // 2) 토큰으로 내 프로필 받아서 user까지 채우기
       try {
-        const me = await userApi.getProfile(); // 또는 getMe()
-        useAuthStore.getState().setUser(me); // setUser가 store에 있어야 함
+        const profile = await userApi.getProfile(); // /api/user/profile
+        login({ accessToken, refreshToken, ...profile, isNewUser });
       } catch (e) {
-        // 내정보 조회 실패해도 일단 홈으로는 보냄
+        // 프로필 실패해도 토큰은 저장돼 있으니 일단 진행
         console.error(e);
       }
 
-      //  최초 가입이면 추가정보 모달
+      // 3) 모달 정리
+      closeLogin();
+      closeAll();
+
+      // 4) 신규유저면 추가정보 모달
       if (isNewUser) openSocialSignup();
 
       navigate("/");
-    };
-
-    navigate("/");
-  }, [params, login, openSocialSignup, navigate]);
+    })();
+  }, [params, login, navigate, closeLogin, closeAll, openSocialSignup]);
 
   return null;
 }
