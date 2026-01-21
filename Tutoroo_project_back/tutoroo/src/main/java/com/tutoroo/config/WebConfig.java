@@ -13,12 +13,13 @@ import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths; // [필수 추가] 경로 처리를 위해 필요
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * [기능: 웹 설정 및 정적 리소스 매핑]
- * - 정적 파일 경로 매핑 (이미지, 오디오)
+ * - 정적 파일 경로 매핑 (이미지, 오디오) -> 절대 경로로 개선됨
  * - JSON 메시지 컨버터 설정 (UTF-8, Octet-Stream 지원)
  * - Enum 대소문자 무시 설정 (Custom Converter 적용)
  */
@@ -30,13 +31,16 @@ public class WebConfig implements WebMvcConfigurer {
     private String uploadRoot;
 
     /**
-     * [정적 리소스 매핑]
-     * URL 패턴: /audio/** -> ./uploads/audio/
-     * URL 패턴: /images/** -> ./uploads/images/
+     * [정적 리소스 매핑 개선]
+     * 기존 상대 경로("./uploads")를 시스템 절대 경로("file:///D:/Projects/...")로 변환합니다.
+     * 이렇게 해야 브라우저가 이미지를 요청했을 때 스프링이 정확한 위치를 찾아줍니다.
      */
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        String rootPath = "file:" + uploadRoot;
+        // [핵심 수정] 상대 경로 -> 절대 경로 URI로 변환
+        String rootPath = Paths.get(uploadRoot).toAbsolutePath().toUri().toString();
+
+        // 경로 끝에 슬래시(/)가 없으면 추가 (스프링 리소스 핸들러 문법)
         if (!rootPath.endsWith("/")) {
             rootPath += "/";
         }
@@ -77,13 +81,11 @@ public class WebConfig implements WebMvcConfigurer {
      */
     @Override
     public void addFormatters(FormatterRegistry registry) {
-        // [수정] 직접 구현한 내부 클래스를 사용합니다.
         registry.addConverterFactory(new CaseInsensitiveEnumConverterFactory());
     }
 
     /**
      * [내부 클래스] 소문자 String -> 대문자 Enum 자동 변환기
-     * 스프링 내부 클래스 접근 제한 문제를 해결하기 위해 직접 구현함.
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static class CaseInsensitiveEnumConverterFactory implements ConverterFactory<String, Enum> {

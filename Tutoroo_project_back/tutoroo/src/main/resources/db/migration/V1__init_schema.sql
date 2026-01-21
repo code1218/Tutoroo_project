@@ -4,13 +4,14 @@ SET FOREIGN_KEY_CHECKS = 0; -- 초기화 시 외래키 제약 임시 해제
 -- -----------------------------------------------------
 -- 1. 사용자 (Users)
 -- [매핑]: UserEntity.java
--- [수정]: username(100), profile_image(512) 길이 확장 (OAuth2 안전성 확보)
+-- [수정]: nickname 컬럼 추가 (자바 엔티티와 동기화 완료)
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `users` (
                                        `id`                BIGINT AUTO_INCREMENT PRIMARY KEY,
                                        `username`          VARCHAR(100) NOT NULL UNIQUE COMMENT '로그인 아이디 (OAuth2 ID 포함)',
     `password`          VARCHAR(255) NOT NULL,
     `name`              VARCHAR(50),
+    `nickname`          VARCHAR(50) COMMENT '[필수] 닉네임', -- [수정] 추가됨
     `gender`            VARCHAR(10),
     `age`               INT,
     `phone`             VARCHAR(20),
@@ -26,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `users` (
 
     -- 권한 및 상태
     `role`              VARCHAR(20) DEFAULT 'ROLE_USER',
-    `status`            VARCHAR(20) DEFAULT 'ACTIVE' COMMENT 'ACTIVE, WITHDRAWN',
+    `status`            VARCHAR(20) DEFAULT 'ACTIVE' COMMENT 'ACTIVE, WITHDRAWN, BANNED',
     `withdrawal_reason` TEXT,
     `deleted_at`        DATETIME,
 

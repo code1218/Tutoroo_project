@@ -34,7 +34,7 @@
             password        = COALESCE(#{password}, password),
             name            = COALESCE(#{name}, name),
             email           = COALESCE(#{email}, email),
-            phone           = COALESCE(#{phone}, phone),
+            username        = COALESCE(#{username}, username), phone           = COALESCE(#{phone}, phone),
             parent_phone    = COALESCE(#{parentPhone}, parent_phone),
             profile_image   = COALESCE(#{profileImage}, profile_image),
             membership_tier = COALESCE(#{membershipTier}, membership_tier),
@@ -54,20 +54,6 @@
             deleted_at      = COALESCE(#{deletedAt}, deleted_at),
 
             updated_at      = NOW()
-        WHERE id = #{id}
-    </update>
-
-    <update id="updateUser" parameterType="com.tutoroo.entity.UserEntity">
-        UPDATE users
-        SET
-            password = COALESCE(#{password}, password),
-            name = COALESCE(#{name}, name),
-            email = COALESCE(#{email}, email),
-            phone = COALESCE(#{phone}, phone),
-            parent_phone = COALESCE(#{parentPhone}, parent_phone),
-            profile_image = COALESCE(#{profileImage}, profile_image),
-            age = COALESCE(#{age}, age),
-            updated_at = NOW()
         WHERE id = #{id}
     </update>
 
@@ -160,7 +146,7 @@
           AND rival_id IS NULL
           AND status = 'ACTIVE'
           AND total_point BETWEEN #{myPoint} - 200 AND #{myPoint} + 200
-            LIMIT 1
+        ORDER BY RAND() LIMIT 1
     </select>
 
     <select id="findUsersForWeeklyReport" resultType="com.tutoroo.entity.UserEntity">

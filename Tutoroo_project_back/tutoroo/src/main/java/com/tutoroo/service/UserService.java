@@ -23,6 +23,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
@@ -43,26 +44,18 @@ public class UserService {
     private final FileStore fileStore;
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
-    private final JwtTokenProvider jwtTokenProvider; // [추가] 토큰 재생성을 위해 주입
+    private final JwtTokenProvider jwtTokenProvider;
 
-    // --- 0. 회원 상세 정보 조회 (수정 화면 초기 진입용) ---
+    // --- 0. 회원 상세 정보 조회 ---
     @Transactional(readOnly = true)
     public UserDTO.ProfileInfo getProfileInfo(String username) {
         UserEntity user = userMapper.findByUsername(username);
         if (user == null) throw new TutorooException(ErrorCode.USER_NOT_FOUND);
 
-        return UserDTO.ProfileInfo.builder()
-                .username(user.getUsername())
-                .name(user.getName())
-                .age(user.getAge())
-                .email(user.getEmail())
-                .phone(user.getPhone())
-                .profileImage(user.getProfileImage())
-                .membershipTier(user.getEffectiveTier().name())
-                .build();
+        return toProfileInfo(user);
     }
 
-    // --- 1. 회원 정보 수정 (Before/After 반환 + 토큰 재발급) ---
+    // --- 1. 회원 정보 수정 ---
     @Transactional
     public UserDTO.UpdateResponse updateUserInfo(String username, UserDTO.UpdateRequest request, MultipartFile image) {
         UserEntity user = userMapper.findByUsername(username);
@@ -70,9 +63,8 @@ public class UserService {
 
         String oldUsername = user.getUsername();
 
-        // [보완] 소셜 로그인 유저는 비밀번호가 없으므로 검증 패스 (Local 유저만 검증)
+        // [검증] 소셜 로그인 유저는 비밀번호가 없으므로 패스, 일반 유저는 검증
         if (user.getProvider() == null) {
-            // 정보 수정 시, 현재 비밀번호 검증이 필수인 경우 체크
             if (request.currentPassword() != null && !request.currentPassword().isBlank()) {
                 if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
                     throw new TutorooException("현재 비밀번호가 일치하지 않습니다.", ErrorCode.INVALID_PASSWORD);
@@ -81,15 +73,7 @@ public class UserService {
         }
 
         // 1. [Snapshot] 변경 전 정보 저장
-        UserDTO.ProfileInfo beforeInfo = UserDTO.ProfileInfo.builder()
-                .username(user.getUsername())
-                .name(user.getName())
-                .age(user.getAge())
-                .email(user.getEmail())
-                .phone(user.getPhone())
-                .profileImage(user.getProfileImage())
-                .membershipTier(user.getEffectiveTier().name())
-                .build();
+        UserDTO.ProfileInfo beforeInfo = toProfileInfo(user);
 
         // 2. 정보 업데이트
         // 비밀번호 변경 (Local 유저만 가능)
@@ -100,29 +84,33 @@ public class UserService {
             user.setPassword(passwordEncoder.encode(request.newPassword()));
         }
 
-        if (request.name() != null && !request.name().isBlank()) user.setName(request.name());
+        if (StringUtils.hasText(request.name())) user.setName(request.name());
         if (request.age() != null) user.setAge(request.age());
+        if (StringUtils.hasText(request.phone())) user.setPhone(request.phone());
 
         // [중요] 이메일(아이디) 변경 처리
-        if (request.email() != null && !request.email().isBlank()) {
-            // 중복 체크
+        if (StringUtils.hasText(request.email())) {
             if (!request.email().equals(oldUsername) && userMapper.findByUsername(request.email()) != null) {
                 throw new TutorooException(ErrorCode.DUPLICATE_ID);
             }
             user.setEmail(request.email());
-            user.setUsername(request.email()); // 아이디와 이메일을 동일하게 유지
+            user.setUsername(request.email());
         }
 
-        if (request.phone() != null && !request.phone().isBlank()) user.setPhone(request.phone());
-
-        // 프로필 이미지 변경
+        // [핵심] 프로필 이미지 변경 (기존 파일 삭제 로직 추가)
         if (image != null && !image.isEmpty()) {
             try {
+                // 1. 기존 이미지가 있다면 삭제 (쓰레기 파일 방지)
+                if (StringUtils.hasText(user.getProfileImage())) {
+                    fileStore.deleteFile(user.getProfileImage());
+                }
+
+                // 2. 새 파일 저장
                 String originalFilename = image.getOriginalFilename();
                 String ext = (originalFilename != null && originalFilename.contains("."))
                         ? originalFilename.substring(originalFilename.lastIndexOf("."))
                         : ".jpg";
-                // 파일 저장 후 URL 반환 (FileStore 구현에 따름)
+
                 String imageUrl = fileStore.storeFile(image.getBytes(), ext);
                 user.setProfileImage(imageUrl);
             } catch (Exception e) {
@@ -131,11 +119,11 @@ public class UserService {
             }
         }
 
-        // 3. DB 반영 (XML에서 COALESCE로 Null Safe하게 처리됨)
+        // 3. DB 반영
         userMapper.update(user);
-        deleteDashboardCache(oldUsername); // 기존 아이디 캐시 삭제
+        deleteDashboardCache(oldUsername);
 
-        // 4. [핵심] 아이디(이메일)가 변경되었다면 새 토큰 발급
+        // 4. 아이디 변경 시 새 토큰 발급
         String newAccessToken = null;
         if (!oldUsername.equals(user.getUsername())) {
             Authentication authentication = new UsernamePasswordAuthenticationToken(
@@ -144,29 +132,20 @@ public class UserService {
             newAccessToken = jwtTokenProvider.generateAccessToken(authentication);
             String newRefreshToken = jwtTokenProvider.generateRefreshToken(authentication);
 
-            // 기존 리프레시 토큰 삭제 및 새 토큰 저장
             redisTemplate.delete("RT:" + oldUsername);
             redisTemplate.opsForValue().set("RT:" + user.getUsername(), newRefreshToken, 14, TimeUnit.DAYS);
 
-            log.info("아이디 변경 감지: {} -> {}. 새 토큰이 발급되었습니다.", oldUsername, user.getUsername());
+            log.info("아이디 변경: {} -> {}", oldUsername, user.getUsername());
         }
 
-        // 5. [Snapshot] 변경 후 정보 생성
-        UserDTO.ProfileInfo afterInfo = UserDTO.ProfileInfo.builder()
-                .username(user.getUsername())
-                .name(user.getName())
-                .age(user.getAge())
-                .email(user.getEmail())
-                .phone(user.getPhone())
-                .profileImage(user.getProfileImage())
-                .membershipTier(user.getEffectiveTier().name())
-                .build();
+        // 5. [Snapshot] 변경 후 정보
+        UserDTO.ProfileInfo afterInfo = toProfileInfo(user);
 
         return UserDTO.UpdateResponse.builder()
                 .before(beforeInfo)
                 .after(afterInfo)
                 .message("회원 정보가 성공적으로 변경되었습니다.")
-                .accessToken(newAccessToken) // 새 토큰 전달 (아이디 변경 시에만 값 있음)
+                .accessToken(newAccessToken)
                 .build();
     }
 
@@ -176,7 +155,6 @@ public class UserService {
         UserEntity me = userMapper.findById(userId);
         if (me == null) throw new TutorooException(ErrorCode.USER_NOT_FOUND);
 
-        // 1. 라이벌이 없는 경우
         if (me.getRivalId() == null) {
             return RivalDTO.RivalComparisonResponse.builder()
                     .hasRival(false)
@@ -186,9 +164,7 @@ public class UserService {
                     .build();
         }
 
-        // 2. 라이벌 정보 조회
         UserEntity rival = userMapper.findById(me.getRivalId());
-        // 라이벌이 탈퇴했거나 비활성 상태인 경우
         if (rival == null || !"ACTIVE".equals(rival.getStatus())) {
             return RivalDTO.RivalComparisonResponse.builder()
                     .hasRival(false)
@@ -198,19 +174,12 @@ public class UserService {
                     .build();
         }
 
-        // 3. 점수 비교 로직
         int myScore = me.getTotalPoint();
         int rivalScore = rival.getTotalPoint();
         int gap = Math.abs(myScore - rivalScore);
-        String msg;
-
-        if (myScore > rivalScore) {
-            msg = String.format("훌륭해요! 라이벌보다 %d점 앞서고 있습니다. 🏆", gap);
-        } else if (myScore < rivalScore) {
-            msg = String.format("분발하세요! 라이벌이 %d점 차이로 앞서갑니다. 🔥", gap);
-        } else {
-            msg = "막상막하! 라이벌과 점수가 같습니다. 긴장하세요!";
-        }
+        String msg = (myScore > rivalScore) ? "훌륭해요! 라이벌보다 " + gap + "점 앞서고 있습니다. 🏆" :
+                (myScore < rivalScore) ? "분발하세요! 라이벌이 " + gap + "점 차이로 앞서갑니다. 🔥" :
+                        "막상막하! 라이벌과 점수가 같습니다. 긴장하세요!";
 
         return RivalDTO.RivalComparisonResponse.builder()
                 .hasRival(true)
@@ -221,25 +190,11 @@ public class UserService {
                 .build();
     }
 
-    // DTO 변환 헬퍼 메서드
-    private RivalDTO.RivalProfile toRivalProfile(UserEntity user) {
-        return RivalDTO.RivalProfile.builder()
-                .userId(user.getId())
-                .name(user.getMaskedName()) // 이름 마스킹 처리
-                .profileImage(user.getProfileImage())
-                .totalPoint(user.getTotalPoint())
-                .rank(user.getDailyRank() != null ? user.getDailyRank() : 0)
-                .level(user.getLevel())
-                .tier(user.getEffectiveTier().name())
-                .build();
-    }
-
-    // --- 3. 대시보드 조회 (Redis Caching 적용) ---
+    // --- 3. 대시보드 조회 ---
     @Transactional(readOnly = true)
     public UserDTO.DashboardDTO getAdvancedDashboard(String username) {
         String cacheKey = "dashboard:" + username;
 
-        // 1. 캐시 조회
         try {
             String cachedJson = redisTemplate.opsForValue().get(cacheKey);
             if (cachedJson != null) {
@@ -252,10 +207,8 @@ public class UserService {
         UserEntity user = userMapper.findByUsername(username);
         if (user == null) throw new TutorooException(ErrorCode.USER_NOT_FOUND);
 
-        // 2. 학습 플랜 조회
         List<StudyPlanEntity> plans = studyMapper.findActivePlansByUserId(user.getId());
 
-        // StudyList 매핑 (프론트엔드 사이드바 표시용)
         List<StudyDTO.StudySimpleInfo> studyList = plans.stream()
                 .map(plan -> StudyDTO.StudySimpleInfo.builder()
                         .id(plan.getId())
@@ -268,7 +221,6 @@ public class UserService {
         String currentGoal = (currentPlan != null) ? currentPlan.getGoal() : "목표를 설정해주세요";
         double progressRate = (currentPlan != null) ? currentPlan.getProgressRate() : 0.0;
 
-        // 최근 학습 로그 조회 (최근 7건)
         List<StudyLogEntity> logs = (currentPlan != null)
                 ? studyMapper.findLogsByPlanId(currentPlan.getId())
                 : new ArrayList<>();
@@ -278,7 +230,6 @@ public class UserService {
                 .map(StudyLogEntity::getTestScore)
                 .collect(Collectors.toList());
 
-        // AI 분석 메시지 생성
         String aiAnalysis = "아직 충분한 학습 데이터가 없습니다. 꾸준히 학습해보세요!";
         String aiSuggestion = "오늘의 학습을 시작해보는 건 어때요?";
 
@@ -288,7 +239,6 @@ public class UserService {
             aiSuggestion = "지난번 점수는 " + lastLog.getTestScore() + "점이었네요. 오늘은 더 잘할 수 있어요!";
         }
 
-        // 3. DTO 빌드
         UserDTO.DashboardDTO dashboardDTO = UserDTO.DashboardDTO.builder()
                 .name(user.getName())
                 .currentGoal(currentGoal)
@@ -301,7 +251,6 @@ public class UserService {
                 .studyList(studyList)
                 .build();
 
-        // 4. 캐시 저장 (10분)
         try {
             String json = objectMapper.writeValueAsString(dashboardDTO);
             redisTemplate.opsForValue().set(cacheKey, json, 10, TimeUnit.MINUTES);
@@ -318,15 +267,11 @@ public class UserService {
         UserEntity me = userMapper.findById(userId);
         if (me.getRivalId() != null) return "이미 라이벌이 등록되어 있습니다.";
 
-        // 내 점수 기준 +- 200점 이내의 유저 검색
         UserEntity rival = userMapper.findPotentialRival(me.getId(), me.getTotalPoint());
         if (rival == null) return "현재 매칭 가능한 라이벌이 없습니다.";
 
-        // 상호 매칭 (단방향 매칭일 수도 있으나 보통 라이벌은 쌍방향)
         me.setRivalId(rival.getId());
         userMapper.update(me);
-
-        // 대시보드 캐시 초기화
         deleteDashboardCache(me.getUsername());
 
         return "매칭 성공! 라이벌: " + rival.getMaskedName();
@@ -338,48 +283,64 @@ public class UserService {
         UserEntity user = userMapper.findById(userId);
         if (user == null) throw new TutorooException(ErrorCode.USER_NOT_FOUND);
 
-        // 로컬 유저인 경우 비밀번호 확인
         if (user.getProvider() == null) {
             if (!passwordEncoder.matches(request.password(), user.getPassword())) {
                 throw new TutorooException("비밀번호가 일치하지 않습니다.", ErrorCode.INVALID_PASSWORD);
             }
         }
 
-        // 탈퇴 처리 (Soft Delete)
         user.setStatus("WITHDRAWN");
         user.setWithdrawalReason(request.reason());
         user.setDeletedAt(LocalDateTime.now());
-
         userMapper.update(user);
 
-        // 관련 데이터 정리
         deleteDashboardCache(user.getUsername());
-        redisTemplate.delete("RT:" + user.getUsername()); // Refresh Token 삭제
+        redisTemplate.delete("RT:" + user.getUsername());
     }
 
-    // --- 6. 비밀번호 검증 (마이페이지 진입 전) ---
+    // --- 6. 비밀번호 검증 ---
     @Transactional(readOnly = true)
     public void verifyPassword(Long userId, String rawPassword) {
         UserEntity user = userMapper.findById(userId);
         if (user == null) throw new TutorooException(ErrorCode.USER_NOT_FOUND);
 
-        // [핵심] 소셜 로그인(구글/카카오) 유저는 비밀번호가 없으므로 무조건 통과
-        if (user.getProvider() != null) {
-            return;
-        }
+        if (user.getProvider() != null) return;
 
-        // 일반 유저 검증
         if (!passwordEncoder.matches(rawPassword, user.getPassword())) {
             throw new TutorooException("비밀번호가 일치하지 않습니다.", ErrorCode.INVALID_PASSWORD);
         }
     }
 
-    // 캐시 삭제 헬퍼
+    // --- Helper Methods ---
     private void deleteDashboardCache(String username) {
         try {
             redisTemplate.delete("dashboard:" + username);
-        } catch (Exception e) {
-            log.warn("캐시 삭제 실패: {}", e.getMessage());
-        }
+        } catch (Exception e) {}
+    }
+
+    // Entity -> ProfileInfo 변환 (중복 제거)
+    private UserDTO.ProfileInfo toProfileInfo(UserEntity user) {
+        return UserDTO.ProfileInfo.builder()
+                .username(user.getUsername())
+                .name(user.getName())
+                .age(user.getAge())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .profileImage(user.getProfileImage())
+                .membershipTier(user.getEffectiveTier().name())
+                .provider(user.getProvider()) // [New] 소셜 유저 여부 추가
+                .build();
+    }
+
+    private RivalDTO.RivalProfile toRivalProfile(UserEntity user) {
+        return RivalDTO.RivalProfile.builder()
+                .userId(user.getId())
+                .name(user.getMaskedName())
+                .profileImage(user.getProfileImage())
+                .totalPoint(user.getTotalPoint())
+                .rank(user.getDailyRank() != null ? user.getDailyRank() : 0)
+                .level(user.getLevel())
+                .tier(user.getEffectiveTier().name())
+                .build();
     }
 }

@@ -13,8 +13,10 @@ public interface UserMapper {
     void save(UserEntity user);
     int countAllUsers();
     UserEntity findById(Long id);
-    UserEntity findByUsername(String username);
-    void update(UserEntity user); // 회원정보 전체 업데이트
+    UserEntity findByUsername(@Param("username") String username);
+
+    // [핵심] 통합 업데이트 메서드 (이거 하나로 프로필 수정, 탈퇴, 포인트 변경 다 처리)
+    void update(UserEntity user);
 
     // --- [인증 & 계정 찾기] ---
     UserEntity findByNameAndEmailAndPhone(@Param("name") String name, @Param("email") String email, @Param("phone") String phone);
@@ -23,12 +25,9 @@ public interface UserMapper {
     void updateUserContact(@Param("id") Long id, @Param("phone") String phone);
     void updateSocialUser(UserEntity user);
 
-    // --- [포인트 관리 (분리됨)] ---
-    // 포인트 획득 (랭킹+지갑)
+    // --- [포인트 관리] ---
     void earnPoints(@Param("userId") Long userId, @Param("amount") int amount);
-    // 포인트 사용 (지갑만)
     void spendPoints(@Param("userId") Long userId, @Param("amount") int amount);
-
     void updateUserPointByPlan(@Param("planId") Long planId, @Param("point") int point);
     void resetRankingPoints();
 

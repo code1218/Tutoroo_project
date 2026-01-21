@@ -13,8 +13,8 @@ public class UserDTO {
             String name,
             String phone,
             String parentPhone,
-            Integer age,            // [Fix] UserService에서 사용하므로 추가
-            String email,           // [Fix] UserService에서 사용하므로 추가
+            Integer age,
+            String email,
             String currentPassword,
             String newPassword
     ) {}
@@ -22,22 +22,23 @@ public class UserDTO {
     // 2. 프로필 조회 응답 (Before/After 스냅샷 용도 겸용)
     @Builder
     public record ProfileInfo(
-            String username,        // [Fix] 에러 원인: username 필드 추가
+            String username,
             String email,
             String name,
-            Integer age,            // [Fix] UserService에서 사용하므로 추가
+            Integer age,
             String phone,
             String role,
-            String profileImage,    // [Fix] UserService 변수명(profileImage)에 맞춤
+            String profileImage,
             int point,
-            String membershipTier   // [Fix] UserService 변수명(membershipTier)에 맞춤
+            String membershipTier,
+            String provider // [New] 소셜 유저 여부 (google, kakao, null) - 프론트 UI 처리용
     ) {}
 
     // 3. 수정 후 응답 (변경 전/후 정보 포함)
     @Builder
     public record UpdateResponse(
-            ProfileInfo before,     // [Fix] 단순 id, name이 아닌 상세 비교 정보로 변경
-            ProfileInfo after,      // [Fix] 상세 비교 정보
+            ProfileInfo before,
+            ProfileInfo after,
             String message,
             String accessToken
     ) {}
