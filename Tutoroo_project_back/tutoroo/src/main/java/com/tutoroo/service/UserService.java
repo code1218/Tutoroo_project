@@ -68,6 +68,7 @@ public class UserService {
         UserEntity user = userMapper.findByUsername(username);
         if (user == null) throw new TutorooException(ErrorCode.USER_NOT_FOUND);
 
+        String oldUsername = user.getUsername();
         // [Fix] 소셜 로그인 유저는 비밀번호가 없으므로 검증 패스 (Local 유저만 검증)
         if (user.getProvider() == null) {
             // 1. 현재 비밀번호 입력 여부 확인 (null 체크 추가)
