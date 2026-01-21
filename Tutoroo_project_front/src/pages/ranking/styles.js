@@ -1,8 +1,7 @@
 import { css } from "@emotion/react";
 
-// --- [기존 페이지 레이아웃] ---
 export const pageBg = css`
-  background-color: #f5f5f5;
+  background-color: #fff;
   min-height: calc(100vh - 72px);
   padding-bottom: 80px;
 `;
@@ -17,12 +16,12 @@ export const container = css`
 `;
 
 export const topSection = css`
-  position: relative;
-  text-align: center;
-  margin-bottom: 40px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
+  text-align: center;
+  margin-bottom: 40px;
 `;
 
 export const pageTitle = css`
@@ -44,6 +43,7 @@ export const filterSelect = css`
   font-size: 14px;
   cursor: pointer;
   outline: none;
+  
   &:hover {
      border-color: #FF9F43;
   }
@@ -51,10 +51,11 @@ export const filterSelect = css`
 
 export const contentWrap = css`
   display: flex;
-  gap: 24px;
   align-items: flex-start;
+  gap: 24px;
 `;
 
+// 리스트
 export const rankListArea = css`
   flex: 1;
   display: flex;
@@ -106,29 +107,17 @@ export const userInfo = css`
   margin-left: 20px;
 `;
 
-export const profileFrame = css`
+export const userProfileImg = (imageUrl) => css`
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background-color: #E0E0E0; 
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden; 
   border: 2px solid #fff;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-`;
-
-export const profileImgContent = css`
-  width: 100%;
-  height: 100%;
-  object-fit: cover; 
-`;
-
-export const userProfileImg = css`
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  background-color: #E0E0E0;  
+  background-image: url(${imageUrl});
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
 `;
 
 export const userName = css`
@@ -143,8 +132,7 @@ export const pointText = css`
   color: #FF9F43;
 `;
 
-
-// --- [내 랭킹 카드 스타일] ---
+// 카드
 export const myStatusArea = css`
   width: 320px;
   position: sticky;
@@ -152,10 +140,83 @@ export const myStatusArea = css`
 `;
 
 export const statusCard = css`
+  text-align: center;
   background: #fff;
   border-radius: 16px;
   padding: 24px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.08);
   border: 1px solid #eee;
-  text-align: center;
+`;
+
+export const cardTitle = css`
+  font-size: 18px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f5f5f5;
+`;
+
+export const cardContent = css`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+`;
+
+export const cardLabel = css`
+  margin-top: 10px;
+  font-size: 14px;
+  color: #888;
+`;
+
+export const myProfileImg = (imageUrl) => css`
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 4px solid #fff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background-color: #E0E0E0;
+  background-image: url(${imageUrl});
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+`;
+
+export const bigPoint = css`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff8f0;
+  border-radius: 12px;
+  font-size: 28px;
+  font-weight: 800;
+  color: #FF9F43;
+  gap: 8px;
+  padding: 12px 20px;
+  width: 100%;
+
+  .rank {
+    font-size: 0.6em;
+    color: #666;
+    margin-right: 4px;
+  }
+
+  .point-value {
+    margin-left: 8px;
+  }
+`;
+
+export const isUnauthenticated = css`
+  color: #999;
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 20px 0;
+`;
+
+export const myUserInfo = css`
+  display: flex;
+  flex-direction: column; 
+  align-items: center;
+  gap: 12px;
 `;
