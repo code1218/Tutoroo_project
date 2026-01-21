@@ -19,31 +19,23 @@ function RankingPage() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // 1. 전체 랭킹 리스트 호출
         const data = await rankingApi.getRankings(filterGender, filterAge);
-        
         if (data) {
           setRankingList(data.allRankers || []);
 
-          // Case A: 서버가 내 랭킹 정보를 줬을 때 (순위권 내)
           if (data.myRank) {
             setMyRanking(data.myRank);
           } 
-          // Case B: 순위권 밖이라서 내 정보가 없을 때 (직접 조회)
           else {
             try {
               const [profile, dashboard] = await Promise.all([
                 rankingApi.getMyProfile(),
                 rankingApi.getMyDashboard()
-              ]);
-              
-              // [중요] 이름 마스킹 처리 (김철수 -> 김*수)
+              ]);              
               let masked = profile.name;
               if (masked && masked.length >= 2) {
                 masked = masked.charAt(0) + "*" + masked.substring(2);
               }
-
-              // MyRankingCard가 기대하는 필드명(maskedName)으로 데이터 구성
               setMyRanking({
                 rank: dashboard.rank,               
                 maskedName: masked,   
@@ -78,7 +70,6 @@ function RankingPage() {
             filterAge={filterAge}
             setFilterAge={setFilterAge}
           />
-          
           <div css={s.contentWrap}>
             <RankingList 
               rankingList={rankingList} 
