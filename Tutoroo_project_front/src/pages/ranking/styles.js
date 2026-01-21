@@ -113,7 +113,7 @@ export const userProfileImg = (imageUrl) => css`
   border-radius: 50%;
   border: 2px solid #fff;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  background-color: #E0E0E0;  
+  background-color: #fff;  
   background-image: url(${imageUrl});
   background-position: center;
   background-size: cover;
@@ -161,11 +161,10 @@ export const cardContent = css`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
 `;
 
 export const cardLabel = css`
-  margin-top: 10px;
+  margin-bottom: 10px;
   font-size: 14px;
   color: #444;
 `;
@@ -180,7 +179,6 @@ export const myProfileImg = (imageUrl) => css`
   background-image: url(${imageUrl});
   background-position: center;
   background-size: cover;
-  background-repeat: no-repeat;
 `;
 
 export const bigPoint = css`
@@ -189,8 +187,8 @@ export const bigPoint = css`
   justify-content: center;
   background: #fff8f0;
   border-radius: 12px;
-  font-size: 28px;
-  font-weight: 800;
+  font-size: 26px;
+  font-weight: 700;
   color: #FF9F43;
   gap: 8px;
   padding: 12px 20px;
@@ -218,5 +216,5 @@ export const myUserInfo = css`
   display: flex;
   flex-direction: column; 
   align-items: center;
-  gap: 12px;
+  margin-bottom: 10px;
 `;
