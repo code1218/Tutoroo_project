@@ -5,12 +5,12 @@
     <insert id="savePlan" parameterType="com.tutoroo.entity.StudyPlanEntity" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO study_plans (
             user_id, goal, persona, custom_tutor_name, roadmap_json,
-            start_date, progress_rate, status, is_paid, created_at, updated_at,
-            current_level, target_level
+            start_date, end_date, progress_rate, status, is_paid,
+            current_level, target_level, created_at, updated_at
         ) VALUES (
                      #{userId}, #{goal}, #{persona}, #{customTutorName}, #{roadmapJson},
-                     NOW(), #{progressRate}, #{status}, #{isPaid}, NOW(), NOW(),
-                     #{currentLevel}, #{targetLevel}
+                     #{startDate}, #{endDate}, #{progressRate}, #{status}, #{isPaid},
+                     #{currentLevel}, #{targetLevel}, NOW(), NOW()
                  )
     </insert>
 
@@ -24,37 +24,43 @@
 
     <select id="findActivePlansByUserId" resultType="com.tutoroo.entity.StudyPlanEntity">
         SELECT * FROM study_plans
-        WHERE user_id = #{userId} AND status = 'PROCEEDING'
+        WHERE user_id = #{userId} AND status IN ('PROCEEDING', 'PAUSED')
         ORDER BY created_at DESC
     </select>
 
     <select id="countActivePlansByUserId" resultType="int">
         SELECT count(*) FROM study_plans
-        WHERE user_id = #{userId} AND status = 'PROCEEDING'
+        WHERE user_id = #{userId} AND status IN ('PROCEEDING', 'PAUSED')
     </select>
 
-    <update id="updateProgress">
+    <update id="updatePlan" parameterType="com.tutoroo.entity.StudyPlanEntity">
         UPDATE study_plans
-        SET progress_rate = #{progressRate},
-            updated_at = NOW()
-        WHERE id = #{id}
-    </update>
-
-    <update id="updatePlan">
-        UPDATE study_plans
-        SET goal = #{goal},
-            roadmap_json = #{roadmapJson},
+        SET
+            goal = #{goal},
+            persona = #{persona},
             custom_tutor_name = #{customTutorName},
+            roadmap_json = #{roadmapJson},
             progress_rate = #{progressRate},
+            current_level = #{currentLevel},
+            target_level = #{targetLevel},
+            start_date = #{startDate},
+            end_date = #{endDate},
             status = #{status},
             is_paid = #{isPaid},
             updated_at = NOW()
         WHERE id = #{id}
     </update>
 
+    <update id="updateProgress">
+        UPDATE study_plans
+        SET progress_rate = #{progressRate}, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
     <delete id="deletePlan">
         DELETE FROM study_plans WHERE id = #{id}
     </delete>
+
 
     <insert id="saveLog" parameterType="com.tutoroo.entity.StudyLogEntity" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO study_logs (
@@ -87,8 +93,9 @@
     </select>
 
     <select id="findLogsByUserIdAndDate" resultType="com.tutoroo.entity.StudyLogEntity">
-        SELECT l.* FROM study_logs l
-                            JOIN study_plans p ON l.plan_id = p.id
+        SELECT l.*
+        FROM study_logs l
+                 JOIN study_plans p ON l.plan_id = p.id
         WHERE p.user_id = #{userId}
           AND DATE(l.study_date) = #{date}
     </select>

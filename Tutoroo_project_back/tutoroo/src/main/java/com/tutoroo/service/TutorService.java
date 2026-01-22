@@ -32,6 +32,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.util.StringUtils;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -57,49 +58,84 @@ public class TutorService {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final FileStore fileStore;
-    // [New] 대화 기억을 위한 Redis 템플릿 추가
     private final RedisTemplate<String, String> redisTemplate;
 
-    // --- [1] 수업 시작 ---
+    // --- [1] 수업 시작 (Step 16: 하이브리드 페르소나 적용) ---
     @Transactional
     public TutorDTO.ClassStartResponse startClass(Long userId, TutorDTO.ClassStartRequest request) {
         StudyPlanEntity plan = studyMapper.findById(request.planId());
         if (plan == null) throw new TutorooException(ErrorCode.STUDY_PLAN_NOT_FOUND);
 
-        // 1. AI 멘트 생성
-        String prompt = String.format("""
+        // 1. 기본 시스템 프롬프트 가져오기 (DB Prompts 테이블)
+        // 예: TEACHER_TIGER -> "너는 호랑이 선생님이야..."
+        String basePersonaKey = "TEACHER_" + request.personaName();
+        String baseSystemContent = commonMapper.findPromptContentByKey(basePersonaKey);
+        if (baseSystemContent == null) baseSystemContent = "너는 열정적인 AI 과외 선생님이야.";
+
+        // 2. [핵심 로직] 페르소나 믹싱 (Custom Name + Selected Style)
+        String finalSystemPrompt = baseSystemContent;
+        String customName = plan.getCustomTutorName();
+
+        if (StringUtils.hasText(customName)) {
+            // 커스텀 이름이 있다면 "본캐(Custom)" + "부캐(Selected)" 믹스
+            finalSystemPrompt = String.format("""
+                    [System Roleplay Instruction]
+                    1. 너의 진짜 정체(본캐)는 '%s'라는 이름의 나만의 전담 튜터야.
+                    2. 하지만 오늘 수업에서는 '%s' 스타일(부캐)로 연기를 해야 해.
+                    3. 지시사항:
+                       - '%s'의 기본 프롬프트 설정: "%s"
+                       - 위 설정을 따르되, 호칭은 '%s'라고 스스로를 소개해.
+                       - 본래의 따뜻함과 오늘의 연기 톤을 자연스럽게 섞어서 말해줘.
+                    """,
+                    customName,
+                    request.personaName(),
+                    request.personaName(),
+                    baseSystemContent,
+                    customName
+            );
+        }
+
+        // 3. AI 오프닝 멘트 생성 요청
+        String userPrompt = String.format("""
                 상황: %d일차 수업 시작.
                 학생 기분: %s
-                선생님 스타일: %s
-                
-                오늘 배울 주제(roadmapJson 참고)를 흥미롭게 소개하고, 학생의 기분을 반영해서 오프닝 멘트를 해줘.
-                형식: "주제 | 멘트"
-                """, request.dayCount(), request.dailyMood(), request.personaName());
+                오늘 배울 주제(roadmapJson 참고)를 흥미롭게 소개하고, 위 페르소나 설정에 맞춰 오프닝 멘트를 해줘.
+                형식: "주제 | 멘트" (멘트는 2문장 이내)
+                """, request.dayCount(), request.dailyMood());
 
-        String response = chatClientBuilder.build().prompt().user(prompt).call().content();
+        String response = chatClientBuilder.build()
+                .prompt(new Prompt(List.of(
+                        new SystemMessage(finalSystemPrompt),
+                        new UserMessage(userPrompt)
+                )))
+                .call()
+                .content();
+
+        // 4. 응답 파싱
         String[] parts = response.split("\\|");
         String topic = parts.length > 0 ? parts[0].trim() : "오늘의 학습";
         String aiMessage = parts.length > 1 ? parts[1].trim() : response;
 
-        // 2. TTS 생성 (URL 반환)
+        // 5. TTS 생성 (목소리는 선택한 스타일의 목소리를 따라감)
         String audioUrl = generateTtsAudio(aiMessage, request.personaName());
 
-        // 3. 배경음악 및 이미지 (예시 URL)
-        String bgmUrl = "/audio/bgm_calm.mp3";
-        String imageUrl = "/images/classroom_default.png";
+        // 6. 리소스 매핑
+        String imageUrl = "/images/tutors/" + request.personaName().toLowerCase() + ".png";
+        String bgmUrl = "/audio/bgm/calm.mp3"; // 테마별 BGM 변경 가능
 
         return new TutorDTO.ClassStartResponse(
                 topic, aiMessage, audioUrl, imageUrl, bgmUrl,
-                10, 5 // 경험치, 스트릭 (임시 값)
+                10, 5 // 획득 경험치, 스트릭 (임시)
         );
     }
 
     // --- [2] 데일리 테스트 생성 ---
     @Transactional(readOnly = true)
     public TutorDTO.DailyTestResponse generateTest(Long userId, Long planId, int dayCount) {
-        // 실제로는 로그나 커리큘럼을 보고 문제를 만듦
-        String question = "Java의 Garbage Collection이 발생하는 영역은?";
-        String voiceUrl = generateTtsAudio(question, "TIGER"); // 기본 목소리
+        // 실제 구현 시: StudyLogEntity나 RoadmapJSON을 파싱하여 문제 생성
+        // 여기서는 Mock 데이터 유지 (기존 코드 존중)
+        String question = "Java의 Garbage Collection이 주로 발생하는 메모리 영역은?";
+        String voiceUrl = generateTtsAudio(question, "TIGER");
 
         return new TutorDTO.DailyTestResponse(
                 "QUIZ",
@@ -116,10 +152,14 @@ public class TutorService {
         StudyPlanEntity plan = studyMapper.findById(planId);
 
         // 1. AI 채점 로직
-        String feedbackPrompt = "문제: Java GC 영역. 답안: " + textAnswer + ". 채점하고 피드백해줘. 형식: 점수:XX | 피드백";
+        String feedbackPrompt = String.format(
+                "문제: Java GC 영역. 답안: %s. 채점하고 피드백해줘. 형식: 점수:XX | 피드백(한 문장)",
+                textAnswer
+        );
+
         String aiResponse = chatClientBuilder.build().prompt().user(feedbackPrompt).call().content();
 
-        int score = parseScore(aiResponse); // "점수: 80" 파싱 메서드 (하단 참조)
+        int score = parseScore(aiResponse);
         String feedbackMsg = aiResponse.contains("|") ?
                 aiResponse.split("\\|")[1].trim() : aiResponse;
         boolean isPassed = score >= 60;
@@ -127,7 +167,7 @@ public class TutorService {
         // 2. 학습 로그 저장
         StudyLogEntity logEntity = StudyLogEntity.builder()
                 .planId(planId)
-                .dayCount(1) // 임시
+                .dayCount(1) // 실제로는 request.dayCount() 사용 필요
                 .testScore(score)
                 .aiFeedback(feedbackMsg)
                 .isCompleted(isPassed)
@@ -140,13 +180,13 @@ public class TutorService {
             eventPublisher.publishEvent(new StudyCompletedEvent(userId, score));
         }
 
-        // 4. TTS 생성 (URL)
+        // 4. TTS 생성
         String audioUrl = generateTtsAudio(feedbackMsg, plan.getPersona());
 
         return new TutorDTO.TestFeedbackResponse(
                 score,
                 feedbackMsg,
-                "오늘의 학습 요약 완료",
+                "오늘의 학습 요약",
                 audioUrl,
                 "/images/feedback_good.png",
                 "내일도 화이팅!",
@@ -154,26 +194,36 @@ public class TutorService {
         );
     }
 
-    // --- [4] 커리큘럼 조정 채팅 (AI 튜터 대화 - Context 적용) ---
-    // [Fix] 기존 단순 호출을 Redis 기반의 대화 기억 로직으로 전면 교체
+    // --- [4] 커리큘럼 조정 채팅 (Context & Persona Mix 적용) ---
     @Transactional
     public TutorDTO.FeedbackChatResponse adjustCurriculum(Long userId, Long planId, String message) {
         StudyPlanEntity plan = studyMapper.findById(planId);
         if (plan == null) throw new TutorooException(ErrorCode.STUDY_PLAN_NOT_FOUND);
 
-        // 1. Redis에서 대화 내역 불러오기 (최근 10턴 = 20개 메시지)
         String historyKey = "chat:history:" + planId;
         List<Message> messages = new ArrayList<>();
 
-        // 2. 시스템 프롬프트 설정 (페르소나 주입)
-        // DB에서 페르소나 정보를 가져오거나, 없으면 기본값 사용
-        String personaKey = "TEACHER_" + (plan.getPersona() != null ? plan.getPersona() : "TIGER");
-        String personaDesc = commonMapper.findPromptContentByKey(personaKey);
-        if (personaDesc == null) personaDesc = "당신은 친절한 AI 선생님입니다.";
+        // 1. 시스템 프롬프트 구성 (startClass와 동일한 믹스 로직 적용)
+        String personaName = plan.getPersona() != null ? plan.getPersona() : "TIGER";
+        String baseSystemContent = commonMapper.findPromptContentByKey("TEACHER_" + personaName);
+        if (baseSystemContent == null) baseSystemContent = "친절한 AI 선생님입니다.";
 
-        messages.add(new SystemMessage(personaDesc + "\n(이전 대화 내용을 기억하고 자연스럽게 이어가세요.)"));
+        String finalSystemPrompt = baseSystemContent;
+        String customName = plan.getCustomTutorName();
 
-        // 3. 과거 대화 내역 추가
+        if (StringUtils.hasText(customName)) {
+            finalSystemPrompt = String.format("""
+                [Identity Override]
+                Name: %s
+                Style: %s
+                Instruction: You are %s but acting in the style of %s. 
+                Keep the conversation flowing naturally based on previous context.
+                """, customName, personaName, customName, personaName);
+        }
+
+        messages.add(new SystemMessage(finalSystemPrompt));
+
+        // 2. Redis 대화 내역 로드
         try {
             List<String> historyJson = redisTemplate.opsForList().range(historyKey, 0, -1);
             if (historyJson != null) {
@@ -181,47 +231,36 @@ public class TutorService {
                     Map<String, String> msgMap = objectMapper.readValue(json, Map.class);
                     String role = msgMap.get("role");
                     String content = msgMap.get("content");
-
-                    if ("user".equals(role)) {
-                        messages.add(new UserMessage(content));
-                    } else if ("assistant".equals(role)) {
-                        messages.add(new AssistantMessage(content));
-                    }
+                    if ("user".equals(role)) messages.add(new UserMessage(content));
+                    else if ("assistant".equals(role)) messages.add(new AssistantMessage(content));
                 }
             }
         } catch (Exception e) {
-            log.error("대화 내역 로딩 실패: {}", e.getMessage());
-            // 에러 나도 현재 대화는 진행
+            log.error("History Load Error", e);
         }
 
-        // 4. 현재 유저 메시지 추가
+        // 3. 현재 메시지 추가 및 AI 호출
         messages.add(new UserMessage(message));
-
-        // 5. AI 호출 (Context 포함)
         Prompt prompt = new Prompt(messages);
         String aiResponse = chatClientBuilder.build().prompt(prompt).call().content();
 
-        // 6. Redis에 대화 내역 저장 (User + Assistant)
+        // 4. Redis 저장 (TTL 24시간)
         try {
             String userJson = objectMapper.writeValueAsString(Map.of("role", "user", "content", message));
             String aiJson = objectMapper.writeValueAsString(Map.of("role", "assistant", "content", aiResponse));
-
             redisTemplate.opsForList().rightPush(historyKey, userJson);
             redisTemplate.opsForList().rightPush(historyKey, aiJson);
 
-            // 메모리 관리: 최근 20개 메시지(10턴)만 유지
             if (redisTemplate.opsForList().size(historyKey) > 20) {
                 redisTemplate.opsForList().trim(historyKey, -20, -1);
             }
-            // TTL 설정 (24시간 동안 대화 없으면 삭제)
             redisTemplate.expire(historyKey, 24, TimeUnit.HOURS);
-
         } catch (JsonProcessingException e) {
-            log.error("대화 내역 저장 실패: {}", e.getMessage());
+            log.error("History Save Error", e);
         }
 
-        // 7. TTS 생성 및 응답
-        String audioUrl = generateTtsAudio(aiResponse, plan.getPersona());
+        // 5. TTS
+        String audioUrl = generateTtsAudio(aiResponse, personaName);
 
         return new TutorDTO.FeedbackChatResponse(aiResponse, audioUrl);
     }
@@ -229,14 +268,11 @@ public class TutorService {
     // --- [5] 음성 인식 (STT) ---
     public String convertSpeechToText(MultipartFile audio) {
         try {
-            // 임시 파일로 저장 후 처리
             File tempFile = File.createTempFile("stt_", ".mp3");
             audio.transferTo(tempFile);
 
-            // [수정 완료] AudioTranscriptionPrompt는 이제 Core 패키지에서 가져옵니다.
             String text = transcriptionModel.call(new AudioTranscriptionPrompt(new FileSystemResource(tempFile))).getResult().getOutput();
 
-            // 임시 파일 삭제
             tempFile.delete();
             return text;
         } catch (Exception e) {
@@ -251,30 +287,20 @@ public class TutorService {
         studyMapper.updateStudentFeedback(request.planId(), request.dayCount(), request.feedback());
     }
 
-    // --- [7] 시험 생성 (주간/월간) ---
+    // --- [7] 시험 생성 ---
     @Transactional(readOnly = true)
     public TutorDTO.ExamGenerateResponse generateExam(Long userId, Long planId, int startDay, int endDay) {
-        // logs 기반으로 AI가 문제 생성하는 로직 (생략)
-
         List<TutorDTO.ExamGenerateResponse.ExamQuestion> questions = new ArrayList<>();
-        questions.add(new TutorDTO.ExamGenerateResponse.ExamQuestion(1, "생성된 문제 1", List.of("보기1", "보기2")));
-
+        questions.add(new TutorDTO.ExamGenerateResponse.ExamQuestion(1, "Java의 특징이 아닌 것은?", List.of("OOP", "Platform Independent", "Pointers", "Multi-threaded")));
         return new TutorDTO.ExamGenerateResponse("주간 평가", questions);
     }
 
     // --- [8] 시험 제출 ---
     @Transactional
     public TutorDTO.ExamResultResponse submitExam(Long userId, TutorDTO.ExamSubmitRequest request) {
-        // 채점 로직
-        int totalScore = 85;
-        boolean isPassed = totalScore >= 70;
-
+        int totalScore = 90;
         return new TutorDTO.ExamResultResponse(
-                totalScore,
-                1, // 레벨업
-                "잘했어요! 다음 단계로 넘어갑시다.",
-                List.of("1번 문제 오답 노트"),
-                isPassed
+                totalScore, 1, "훌륭해요! 만점에 가까운 점수입니다.", List.of(), true
         );
     }
 
@@ -288,34 +314,26 @@ public class TutorService {
         }
     }
 
-    // --- [Private] TTS 생성 및 파일 저장 (최적화) ---
+    // --- [Private] TTS 생성 및 파일 저장 ---
     private String generateTtsAudio(String text, String personaName) {
         try {
-            // 1. 캐시 확인 (DB)
-            String textHash = generateHash(text + personaName);
+            // 캐시 확인
+            String textHash = generateHash(text + (personaName != null ? personaName : "DEFAULT"));
             TtsCacheEntity cached = commonMapper.findTtsCacheByHash(textHash);
-            if (cached != null) {
-                return cached.getAudioPath(); // 이미 저장된 파일 URL 반환
-            }
+            if (cached != null) return cached.getAudioPath();
 
-            // 2. 목소리 선택 (Spring AI 1.0.0-M6 대응: String -> Enum 변환)
-            // 기본값: ALLOY
+            // 목소리 매핑
             OpenAiAudioApi.SpeechRequest.Voice voice = OpenAiAudioApi.SpeechRequest.Voice.ALLOY;
             if (personaName != null) {
-                if (personaName.contains("호랑이") || personaName.contains("TIGER")) {
-                    voice = OpenAiAudioApi.SpeechRequest.Voice.ONYX; // 중저음, 남성적
-                } else if (personaName.contains("토끼") || personaName.contains("RABBIT")) {
-                    voice = OpenAiAudioApi.SpeechRequest.Voice.NOVA; // 활기참, 여성적
-                } else if (personaName.contains("거북이") || personaName.contains("TURTLE")) {
-                    voice = OpenAiAudioApi.SpeechRequest.Voice.ALLOY; // 차분함, 중성적
-                } else if (personaName.contains("캥거루") || personaName.contains("KANGAROO")) {
-                    voice = OpenAiAudioApi.SpeechRequest.Voice.SHIMMER; // 맑음, 여성적
-                } else if (personaName.contains("용") || personaName.contains("DRAGON")) {
-                    voice = OpenAiAudioApi.SpeechRequest.Voice.ECHO; // 부드러움, 남성적
-                }
+                String pUpper = personaName.toUpperCase();
+                if (pUpper.contains("TIGER") || pUpper.contains("호랑이")) voice = OpenAiAudioApi.SpeechRequest.Voice.ONYX;
+                else if (pUpper.contains("RABBIT") || pUpper.contains("토끼")) voice = OpenAiAudioApi.SpeechRequest.Voice.NOVA;
+                else if (pUpper.contains("KANGAROO") || pUpper.contains("캥거루")) voice = OpenAiAudioApi.SpeechRequest.Voice.SHIMMER;
+                else if (pUpper.contains("DRAGON") || pUpper.contains("용")) voice = OpenAiAudioApi.SpeechRequest.Voice.ECHO;
+                else if (pUpper.contains("TURTLE") || pUpper.contains("거북이")) voice = OpenAiAudioApi.SpeechRequest.Voice.ALLOY;
             }
 
-            // 3. OpenAI TTS 호출 (옵션 빌더에 Enum 전달)
+            // OpenAI TTS 호출
             SpeechResponse res = speechModel.call(
                     new SpeechPrompt(text, OpenAiAudioSpeechOptions.builder()
                             .model("tts-1")
@@ -324,20 +342,14 @@ public class TutorService {
             );
             byte[] audioData = res.getResult().getOutput();
 
-            // 4. [최적화] FileStore 저장
+            // 저장 및 캐싱
             String fileUrl = fileStore.storeFile(audioData, ".mp3");
-
-            // 5. 캐시 저장
-            commonMapper.saveTtsCache(TtsCacheEntity.builder()
-                    .textHash(textHash)
-                    .audioPath(fileUrl)
-                    .build());
+            commonMapper.saveTtsCache(TtsCacheEntity.builder().textHash(textHash).audioPath(fileUrl).build());
 
             return fileUrl;
-
         } catch (Exception e) {
-            log.error("TTS Generation Error: {}", e.getMessage());
-            return null; // 프론트엔드에서 예외 처리 가능하도록 null 반환
+            log.error("TTS Fail", e);
+            return null;
         }
     }
 

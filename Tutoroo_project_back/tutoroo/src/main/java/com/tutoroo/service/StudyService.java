@@ -18,12 +18,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -38,23 +39,24 @@ public class StudyService {
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
 
-    // --- [1] 현재 학습 플랜 상세 조회 (대시보드용) ---
+    // --- [1] 현재 학습 플랜 상세 조회 (Step 5: 대시보드/로드맵) ---
     @Transactional(readOnly = true)
     public StudyDTO.PlanDetailResponse getCurrentPlanDetail(Long userId) {
         List<StudyPlanEntity> plans = studyMapper.findActivePlansByUserId(userId);
         if (plans.isEmpty()) {
+            // 활성 플랜이 없으면 null 반환 (프론트에서 '플랜 생성하기' 버튼 노출)
             return null;
         }
         StudyPlanEntity currentPlan = plans.get(0);
 
-        // JSON -> RoadmapData 객체 변환
+        // JSON 로드맵 파싱 (예외 발생 시 로그 남기고 null 처리하여 UI 오류 방지)
         AssessmentDTO.RoadmapData roadmapData = null;
         try {
-            if (currentPlan.getRoadmapJson() != null) {
+            if (StringUtils.hasText(currentPlan.getRoadmapJson())) {
                 roadmapData = objectMapper.readValue(currentPlan.getRoadmapJson(), AssessmentDTO.RoadmapData.class);
             }
         } catch (JsonProcessingException e) {
-            log.error("로드맵 JSON 파싱 실패: {}", e.getMessage());
+            log.error("⚠️ 로드맵 JSON 파싱 실패 (PlanId: {}): {}", currentPlan.getId(), e.getMessage());
         }
 
         return StudyDTO.PlanDetailResponse.builder()
@@ -68,77 +70,90 @@ public class StudyService {
                 .build();
     }
 
-    // --- [2] 현재 학습 상태 요약 (메인 화면용) ---
+    // --- [2] 현재 학습 상태 요약 (메인 홈 위젯용) ---
     @Transactional(readOnly = true)
     public StudyDTO.StudyStatusResponse getCurrentStudyStatus(Long userId) {
         List<StudyPlanEntity> plans = studyMapper.findActivePlansByUserId(userId);
         if (plans.isEmpty()) return null;
 
         StudyPlanEntity currentPlan = plans.get(0);
+
+        // 오늘 학습 완료 여부 체크
         List<StudyLogEntity> todayLogs = studyMapper.findLogsByUserIdAndDate(userId, LocalDate.now());
-        boolean isResting = !todayLogs.isEmpty();
+        boolean isResting = !todayLogs.isEmpty() && todayLogs.stream().anyMatch(StudyLogEntity::getIsCompleted);
+
+        // 마지막 학습 주제 가져오기
+        String lastTopic = todayLogs.isEmpty() ? "새로운 학습을 시작해보세요!" : todayLogs.get(0).getContentSummary();
 
         return StudyDTO.StudyStatusResponse.builder()
                 .planId(currentPlan.getId())
                 .goal(currentPlan.getGoal())
                 .personaName(currentPlan.getPersona())
+                // 로그 수 + 1일차 (단순 계산, 필요 시 DB max(day_count) 사용)
                 .currentDay(todayLogs.size() + 1)
                 .progressRate(currentPlan.getProgressRate())
-                .isResting(isResting)
-                .lastTopic(isResting ? todayLogs.get(0).getContentSummary() : "새로운 학습 대기중")
+                .isResting(isResting) // Step 7: 쉬는 시간 상태 반영
+                .lastTopic(lastTopic)
                 .build();
     }
 
-    // --- [3] 간편 학습 로그 저장 ---
+    // --- [3] 학습 로그 저장 및 진도율 업데이트 ---
     @Transactional
     public void saveSimpleLog(Long userId, StudyDTO.StudyLogRequest request) {
         StudyPlanEntity plan = studyMapper.findById(request.planId());
         if (plan == null) throw new TutorooException(ErrorCode.STUDY_PLAN_NOT_FOUND);
 
-        StudyLogEntity log = StudyLogEntity.builder()
+        // 1. 로그 저장
+        StudyLogEntity logEntity = StudyLogEntity.builder()
                 .planId(plan.getId())
                 .studyDate(LocalDateTime.now())
                 .dayCount(request.dayCount())
                 .contentSummary(request.contentSummary())
                 .testScore(request.score())
                 .isCompleted(request.isCompleted())
-                .pointChange(request.score() > 0 ? request.score() : 10)
+                .pointChange(request.score() > 0 ? request.score() : 10) // 점수만큼 포인트 or 기본 10
                 .build();
-        studyMapper.saveLog(log);
+        studyMapper.saveLog(logEntity);
 
-        userMapper.earnPoints(userId, log.getPointChange());
+        // 2. 유저 포인트 지급 (Step 17)
+        userMapper.earnPoints(userId, logEntity.getPointChange());
 
-        // 단순 진도율 업데이트 로직
-        int newProgress = (int) ((double) request.dayCount() / 30.0 * 100);
-        if (newProgress > 100) newProgress = 100;
+        // 3. 진도율 자동 계산 및 업데이트
+        int newProgress = calculateProgress(plan, request.dayCount());
         updateProgress(plan.getId(), newProgress);
+
+        log.info("📝 학습 로그 저장 완료: User={}, Plan={}, Day={}", userId, plan.getId(), request.dayCount());
     }
 
-    // --- [4] 채팅 핸들링 ---
+    // --- [4] 채팅 핸들링 (커리큘럼 조정 등) ---
+    @Transactional
     public StudyDTO.ChatResponse handleSimpleChat(Long userId, String message) {
         List<StudyPlanEntity> plans = studyMapper.findActivePlansByUserId(userId);
         if (plans.isEmpty()) throw new TutorooException(ErrorCode.STUDY_PLAN_NOT_FOUND);
 
+        // TutorService의 AI 채팅 로직 호출 (Redis 기억하기 기능 포함)
         TutorDTO.FeedbackChatResponse tutorResponse = tutorService.adjustCurriculum(userId, plans.get(0).getId(), message);
+
         return StudyDTO.ChatResponse.builder()
                 .aiMessage(tutorResponse.aiResponse())
                 .audioUrl(tutorResponse.audioUrl())
                 .build();
     }
 
-    // --- [5] 활성 학습 목록 조회 ---
+    // --- [5] 활성 학습 목록 조회 (사이드바/메뉴용) ---
     @Transactional(readOnly = true)
     public List<StudyDTO.StudySimpleInfo> getActiveStudyList(Long userId) {
         return studyMapper.findActivePlansByUserId(userId).stream()
                 .map(plan -> StudyDTO.StudySimpleInfo.builder()
                         .id(plan.getId())
                         .name(plan.getGoal())
-                        .tutor(plan.getCustomTutorName() != null ? plan.getCustomTutorName() : plan.getPersona())
+                        // 커스텀 이름이 있으면 우선 표시, 없으면 페르소나 이름 표시
+                        .tutor(StringUtils.hasText(plan.getCustomTutorName()) ? plan.getCustomTutorName() : plan.getPersona())
                         .build())
                 .collect(Collectors.toList());
     }
 
-    // --- [New] 학습 플랜 삭제 (Controller 호환용 추가됨) ---
+    // --- [6] 학습 플랜 삭제 (유저 요청) ---
     @Transactional
     public void deleteStudyPlan(Long userId, Long planId) {
         StudyPlanEntity plan = studyMapper.findById(planId);
@@ -146,43 +161,102 @@ public class StudyService {
             throw new TutorooException("존재하지 않는 학습 플랜입니다.", ErrorCode.STUDY_PLAN_NOT_FOUND);
         }
 
-        // 본인 소유 확인
+        // 본인 확인
         if (!plan.getUserId().equals(userId)) {
             throw new TutorooException("본인의 학습 플랜만 삭제할 수 있습니다.", ErrorCode.UNAUTHORIZED_ACCESS);
         }
 
         studyMapper.deletePlan(planId);
-        log.info("학습 플랜 삭제 완료: userId={}, planId={}", userId, planId);
+        log.info("🗑️ 학습 플랜 삭제 완료: userId={}, planId={}", userId, planId);
     }
 
-    // --- [6] 기타 기능들 ---
+    // --- [7] 캘린더 데이터 (Step 5 상세) ---
+    @Transactional(readOnly = true)
+    public StudyDTO.CalendarResponse getMonthlyCalendar(Long userId, int year, int month) {
+        List<StudyLogEntity> logs = studyMapper.findLogsByUserIdAndMonth(userId, year, month);
+
+        // 날짜별 그룹화
+        var logsByDay = logs.stream()
+                .collect(Collectors.groupingBy(log -> log.getStudyDate().getDayOfMonth()));
+
+        List<StudyDTO.DailyLog> dailyLogs = new ArrayList<>();
+        int totalStudyDays = 0;
+
+        for (var entry : logsByDay.entrySet()) {
+            int day = entry.getKey();
+            List<StudyLogEntity> dayLogs = entry.getValue();
+
+            // 하루라도 완료(isCompleted=true) 기록이 있으면 출석 인정
+            boolean isDone = dayLogs.stream().anyMatch(StudyLogEntity::getIsCompleted);
+            if (isDone) totalStudyDays++;
+
+            // 그 날의 최고 점수 및 대표 주제 추출
+            int maxScore = dayLogs.stream()
+                    .mapToInt(l -> l.getTestScore() != null ? l.getTestScore() : 0)
+                    .max().orElse(0);
+            String topic = dayLogs.isEmpty() ? "" : dayLogs.get(0).getContentSummary();
+
+            dailyLogs.add(new StudyDTO.DailyLog(day, isDone, maxScore, topic));
+        }
+
+        return StudyDTO.CalendarResponse.builder()
+                .year(year).month(month)
+                .totalStudyDays(totalStudyDays)
+                .logs(dailyLogs)
+                .build();
+    }
+
+    // --- [Helper] Step 18: 멤버십 기반 플랜 생성 제한 확인 ---
     @Transactional(readOnly = true)
     public boolean canCreateNewGoal(Long userId) {
         try {
             validatePlanCreationLimit(userId);
             return true;
-        } catch (Exception e) { return false; }
-    }
-
-    @Transactional
-    public void updateProgress(Long planId, Integer rate) {
-        StudyPlanEntity plan = studyMapper.findById(planId);
-        if(plan != null) {
-            plan.setProgressRate(rate);
-            studyMapper.updateProgress(plan);
+        } catch (TutorooException e) {
+            return false;
         }
     }
 
     @Transactional(readOnly = true)
     public void validatePlanCreationLimit(Long userId) {
         UserEntity user = userMapper.findById(userId);
+        int currentCount = studyMapper.countActivePlansByUserId(userId);
         MembershipTier tier = user.getEffectiveTier();
-        if (studyMapper.findActivePlansByUserId(userId).size() >= tier.getMaxActiveGoals()) {
-            throw new TutorooException(ErrorCode.MULTIPLE_PLANS_REQUIRED_PAYMENT);
+
+        if (currentCount >= tier.getMaxActiveGoals()) {
+            throw new TutorooException(
+                    String.format("등급(%s) 제한: 최대 %d개의 목표만 생성 가능합니다.", tier.name(), tier.getMaxActiveGoals()),
+                    ErrorCode.MULTIPLE_PLANS_REQUIRED_PAYMENT
+            );
         }
     }
 
-    // Redis 세션 관리
+    @Transactional
+    public void updateProgress(Long planId, Integer rate) {
+        StudyPlanEntity plan = studyMapper.findById(planId);
+        if (plan != null) {
+            plan.setProgressRate((double) rate);
+            studyMapper.updateProgress(plan);
+        }
+    }
+
+    // [New] 스마트 진도율 계산 로직
+    private int calculateProgress(StudyPlanEntity plan, int currentDay) {
+        // 1. 종료일이 없으면 기본 30일 기준으로 계산
+        if (plan.getEndDate() == null || plan.getStartDate() == null) {
+            return Math.min(100, (int) ((double) currentDay / 30.0 * 100));
+        }
+
+        // 2. 전체 기간 계산 (종료일 - 시작일)
+        long totalDays = ChronoUnit.DAYS.between(plan.getStartDate(), plan.getEndDate());
+        if (totalDays <= 0) totalDays = 1; // 0으로 나누기 방지
+
+        // 3. 퍼센트 계산
+        int percent = (int) ((double) currentDay / totalDays * 100);
+        return Math.min(100, Math.max(0, percent)); // 0~100 사이로 보정
+    }
+
+    // --- Redis 세션 관리 (Step 7: 학습 중 상태 유지) ---
     public void saveSessionState(Long planId, String stateJson) {
         String key = "session:" + planId;
         redisTemplate.opsForValue().set(key, stateJson, 24, TimeUnit.HOURS);
@@ -194,33 +268,5 @@ public class StudyService {
 
     public void clearSessionState(Long planId) {
         redisTemplate.delete("session:" + planId);
-    }
-
-    @Transactional(readOnly = true)
-    public StudyDTO.CalendarResponse getMonthlyCalendar(Long userId, int year, int month) {
-        List<StudyLogEntity> logs = studyMapper.findLogsByUserIdAndMonth(userId, year, month);
-        Map<Integer, List<StudyLogEntity>> logsByDay = logs.stream()
-                .collect(Collectors.groupingBy(log -> log.getStudyDate().getDayOfMonth()));
-
-        List<StudyDTO.DailyLog> dailyLogs = new ArrayList<>();
-        int studyDayCount = 0;
-
-        for (Map.Entry<Integer, List<StudyLogEntity>> entry : logsByDay.entrySet()) {
-            int day = entry.getKey();
-            List<StudyLogEntity> dayLogs = entry.getValue();
-            boolean isDone = dayLogs.stream().anyMatch(StudyLogEntity::getIsCompleted);
-            if (isDone) studyDayCount++;
-
-            dailyLogs.add(StudyDTO.DailyLog.builder()
-                    .day(day)
-                    .isDone(isDone)
-                    .score(dayLogs.stream().mapToInt(l -> l.getTestScore() != null ? l.getTestScore() : 0).max().orElse(0))
-                    .topic(dayLogs.isEmpty() ? "" : dayLogs.get(0).getContentSummary())
-                    .build());
-        }
-
-        return StudyDTO.CalendarResponse.builder()
-                .year(year).month(month).totalStudyDays(studyDayCount).logs(dailyLogs)
-                .build();
     }
 }

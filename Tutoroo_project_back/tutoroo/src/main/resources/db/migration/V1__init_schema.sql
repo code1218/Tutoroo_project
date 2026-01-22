@@ -4,14 +4,14 @@ SET FOREIGN_KEY_CHECKS = 0; -- 초기화 시 외래키 제약 임시 해제
 -- -----------------------------------------------------
 -- 1. 사용자 (Users)
 -- [매핑]: UserEntity.java
--- [수정]: nickname 컬럼 추가 (자바 엔티티와 동기화 완료)
+-- [수정]: nickname 컬럼 추가 및 인덱스 최적화
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `users` (
                                        `id`                BIGINT AUTO_INCREMENT PRIMARY KEY,
                                        `username`          VARCHAR(100) NOT NULL UNIQUE COMMENT '로그인 아이디 (OAuth2 ID 포함)',
     `password`          VARCHAR(255) NOT NULL,
     `name`              VARCHAR(50),
-    `nickname`          VARCHAR(50) COMMENT '[필수] 닉네임', -- [수정] 추가됨
+    `nickname`          VARCHAR(50) COMMENT '[필수] 닉네임',
     `gender`            VARCHAR(10),
     `age`               INT,
     `phone`             VARCHAR(20),
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS `users` (
 -- -----------------------------------------------------
 -- 2. 학습 플랜 (Study Plans)
 -- [매핑]: StudyPlanEntity.java
--- [수정]: goal 컬럼 TEXT로 변경 (긴 목표 수용)
+-- [수정]: goal 컬럼 TEXT로 변경, 레벨 정보 추가
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `study_plans` (
                                              `id`                BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -109,12 +109,18 @@ CREATE TABLE IF NOT EXISTS `study_logs` (
 -- -----------------------------------------------------
 -- 4. 펫 정보 (Pet Info)
 -- [매핑]: PetInfoEntity.java
+-- [중요 수정]: 커스텀 펫(Step 20) 지원을 위한 컬럼 추가
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `pet_info` (
                                           `pet_id`            BIGINT AUTO_INCREMENT PRIMARY KEY,
                                           `user_id`           BIGINT NOT NULL,
                                           `pet_name`          VARCHAR(50),
-    `pet_type`          VARCHAR(30) NOT NULL COMMENT 'Enum: TIGER, RABBIT...',
+    `pet_type`          VARCHAR(30) NOT NULL COMMENT 'Enum: TIGER, RABBIT, CUSTOM...',
+
+    -- [New] 커스텀 펫 전용 필드 (AI 생성 정보 저장)
+    `custom_description` TEXT COMMENT '커스텀 펫 외형 묘사',
+    `custom_image_url`   VARCHAR(512) COMMENT 'AI가 생성한 펫 이미지 URL',
+
     `stage`             INT DEFAULT 1 COMMENT '1(알)~5(졸업)',
     `status`            VARCHAR(20) DEFAULT 'ACTIVE' COMMENT 'ACTIVE, GRADUATED, RUNAWAY',
 
@@ -129,7 +135,7 @@ CREATE TABLE IF NOT EXISTS `pet_info` (
 
     `equipped_items`    LONGTEXT COMMENT 'JSON: 착용 아이템 목록',
 
-    -- 시간 기록 (스케줄러 계산용 필수 필드)
+    -- 시간 기록
     `last_fed_at`       DATETIME DEFAULT CURRENT_TIMESTAMP,
     `last_played_at`    DATETIME DEFAULT CURRENT_TIMESTAMP,
     `last_cleaned_at`   DATETIME DEFAULT CURRENT_TIMESTAMP,
