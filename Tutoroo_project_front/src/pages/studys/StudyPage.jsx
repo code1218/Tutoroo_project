@@ -9,16 +9,28 @@ function StudyPage() {
   const { messages, sendMessage, isChatLoading } = useStudyStore();
   const [inputText, setInputText] = useState("");
   const scrollRef = useRef(null);
+  const audioRef = useRef(new Audio());
 
-  // 메시지 올 때마다 스크롤 맨 아래로 이동
+  // 스크롤 자동 이동 (메시지 추가 시)
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isChatLoading]);
 
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.type === 'AI' && lastMsg.audioUrl) {
+        audioRef.current.pause();
+        audioRef.current.src = lastMsg.audioUrl;
+        audioRef.current.play().catch(e => console.log("Audio play blocked:", e));
+      }
+    }
+  }, [messages]);
+
   const handleSend = () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || isChatLoading) return;
     sendMessage(inputText);
     setInputText("");
   };
@@ -44,7 +56,7 @@ function StudyPage() {
               const isUser = msg.type === "USER";
               return (
                 <div key={index} css={s.messageRow(isUser)}>
-                  {/* AI면 프로필 아이콘 표시 */}
+                  {/* AI 프로필 아이콘 (AI일 때만 표시) */}
                   {!isUser && <div css={s.aiProfileIcon} />} 
                   
                   <div css={s.bubble(isUser)}>
@@ -59,7 +71,9 @@ function StudyPage() {
           {isChatLoading && (
             <div css={s.messageRow(false)}>
               <div css={s.aiProfileIcon} />
-              <div css={s.bubble(false)}>...</div>
+              <div css={s.bubble(false)}>
+                <span className="dot-flashing">...</span>
+              </div>
             </div>
           )}
         </main>
@@ -80,6 +94,7 @@ function StudyPage() {
                       onChange={(e) => setInputText(e.target.value)}
                       onKeyDown={handleKeyDown}
                       disabled={isChatLoading}
+                      autoFocus
                     />
                 </div>
                 

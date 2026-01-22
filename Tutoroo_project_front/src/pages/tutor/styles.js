@@ -46,18 +46,19 @@ export const detailPanel = css`
 export const tutorItem = (isActive) => css`
   display: flex;
   align-items: center;
-  padding: 0 24px;
-  width: 100%;
-  height: 72px; 
-  border-radius: 12px;
-  border: 1px solid ${isActive ? theme.colors.primary : "#ddd"};
-  background: ${isActive ? "#FFF" : "#FFF"};
-  box-shadow: ${isActive ? "0 0 0 2px " + theme.colors.primary : "none"};
+  padding: 12px 20px;
+  background-color: ${isActive ? "#FFF9F0" : "#fff"};
+  border: 1px solid ${isActive ? theme.colors.primary : "#eee"};
+  border-radius: 16px;
   cursor: pointer;
-  
-  /* ✅ 리스트 아이콘 이미지 스타일 */
-  .icon { 
-    margin-right: 16px; 
+  transition: all 0.2s;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  }
+
+  .profile { 
     width: 68px; 
     height: 68px; 
     object-fit: contain; 
@@ -81,9 +82,12 @@ export const customBtn = (isActive) => css`
   justify-content: center;
   ${tutorItem(isActive)};
   height: 64px;
+  margin-top: 10px;
 
   .name { 
     flex: unset; 
+    text-align: center;
+    padding-left: 0;
   }
 `;
 
@@ -95,7 +99,6 @@ export const infoBox = css`
   align-items: center;
 `;
 
-/* ✅ 상세 패널의 큰 프로필 이미지 스타일 */
 export const detailProfileImg = css`
   width: 160px; 
   height: 160px; 
@@ -105,39 +108,90 @@ export const detailProfileImg = css`
 
 export const guideText = css`
   font-size: 18px;
-  margin-bottom: 20px;
-  word-break: keep-all;
   line-height: 1.5;
+  color: #555;
+  margin-bottom: 30px;
+  
+  strong {
+    color: ${theme.colors.primary};
+  }
 `;
 
 export const descBox = css`
-  background: #ffffff;
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  width: 80%;
   margin-bottom: 30px;
-  padding: 16px; 
-  border-radius: 16px;
-  width: 100%;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+
+  strong {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 16px;
+    color: #333;
+  }
+
+  p {
+    font-size: 14px;
+    color: #666;
+    line-height: 1.4;
+    margin: 0;
+  }
 `;
 
 export const customInput = css`
-  width: 100%;
-  height: 120px; 
-  padding: 16px; 
-  border: 1px solid #ccc; 
-  border-radius: 12px; 
-  resize: none; 
-  margin-bottom: 24px;
+  width: 80%;
+  height: 120px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  resize: none;
+  font-size: 15px;
+  margin-bottom: 30px;
+  
+  &:focus {
+    outline: none;
+    border-color: ${theme.colors.primary};
+  }
 `;
 
 export const startBtn = css`
-  width: 100%; 
-  height: 52px; 
-  background-color: ${theme.colors.primary}; 
-  color: #fff; 
-  font-weight: 700; 
-  font-size: 18px; 
-  border-radius: 12px;
+  width: 200px;
+  height: 52px;
+  background-color: ${theme.colors.primary};
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  border: none;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: ${theme.colors.primaryDark || "#e0a800"};
+  }
   
-  &:hover { 
-    background-color: ${theme.colors.accent}; 
+  &:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+`;
+
+export const disabledBtn = css`
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  cursor: not-allowed;
+  opacity: 0.7;
+
+  &:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .name {
+    color: #999;
+    font-size: 16px;
+    font-weight: 500;
   }
 `;

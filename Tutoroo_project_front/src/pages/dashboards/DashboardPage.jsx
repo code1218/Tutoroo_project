@@ -168,7 +168,6 @@ function DashboardPage() {
               </div>
             </div>
 
-            {/* 포인트 / 랭킹 카드 (클릭하면 "/ranking" 페이지로 이동) */}
             <div
               css={s.card}
               onClick={() => navigate("/ranking")}

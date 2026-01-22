@@ -9,87 +9,98 @@ export const SESSION_MODES = {
 };
 
 const useStudyStore = create((set, get) => ({
-  studyDay: 1,
+  studyDay: 1,      
+  planId: null,     
   isLoading: false,
-  selectedTutorId: "kangaroo",
   
-  messages: [],  
+  messages: [],
   isChatLoading: false,
+
+  currentMode: "CLASS",
+  timeLeft: SESSION_MODES.CLASS.defaultTime,
+  isTimerRunning: false,
 
   loadUserStatus: async () => {
     set({ isLoading: true });
     try {
       const data = await studyApi.getStudyStatus();
-      set({ studyDay: data.day_count || 1 }); 
+      set({ 
+        studyDay: data.currentDay || 1, 
+        planId: data.planId, 
+      }); 
     } catch (error) {
+      console.error("로드 실패:", error);
       set({ studyDay: 1 });
     } finally {
       set({ isLoading: false });
     }
   },
 
-  setTutorId: (id) => set({ selectedTutorId: id }),
-
-  // 학습 시작 
-  startStudyPlan: async (customReq, navigate) => {
+  startClassSession: async (tutorInfo, navigate) => {
     set({ isLoading: true });
-    const { selectedTutorId } = get();
-    const personaString = customReq ? `BASE:${selectedTutorId}|CUSTOM:${customReq}` : selectedTutorId;
+    const { planId, studyDay } = get();
+
+    if (!planId) {
+        alert("학습 정보를 불러오는 중입니다. 잠시만 기다려주세요.");
+        await get().loadUserStatus();
+        set({ isLoading: false });
+        return;
+    }
 
     try {
-      await studyApi.createStudyPlan({
-        persona: personaString,
-        goal: "Daily Study", 
-        start_date: new Date().toISOString().split('T')[0]
+      const res = await studyApi.startClass({
+        planId: planId, 
+        dayCount: studyDay,
+        personaName: tutorInfo.id.toUpperCase(), 
+        dailyMood: "HAPPY" 
       });
 
-      // 입장 메시지 추가
       set({ 
-        messages: [{ type: 'AI', content: `안녕하세요! ${selectedTutorId} 선생님입니다. 50분 동안 수업을 진행하겠습니다!` }] 
+        messages: [{
+          type: 'AI',
+          content: res.aiMessage,
+          audioUrl: res.audioUrl
+        }],
+        currentMode: "CLASS",
+        timeLeft: SESSION_MODES.CLASS.defaultTime,
+        isTimerRunning: true
       });
 
-      navigate("/study");
-      get().setSessionMode("CLASS");
+      console.log("Navigating to /study...");
+      navigate("/study"); 
 
     } catch (error) {
-      alert("학습 시작 실패");
+      console.error("수업 시작 실패:", error);
+      alert("수업을 시작할 수 없습니다. 다시 시도해주세요.");
     } finally {
       set({ isLoading: false });
     }
   },
 
-  // 채팅 전송 
-  sendMessage: async (userText) => {
-    if (!userText.trim()) return;
-
-    // 내 말풍선 즉시 추가
-    const prevMessages = get().messages;
-    set({ 
-      messages: [...prevMessages, { type: 'USER', content: userText }],
-      isChatLoading: true 
-    });
+  sendMessage: async (text) => {
+    set((state) => ({
+      messages: [...state.messages, { type: 'USER', content: text }],
+      isChatLoading: true
+    }));
 
     try {
-      const data = await studyApi.sendChatMessage(userText);
-      const aiReply = data.reply || "AI 응답이 없습니다.";
-
+      const res = await studyApi.sendChatMessage(text);
       set((state) => ({
-        messages: [...state.messages, { type: 'AI', content: aiReply }],
+        messages: [...state.messages, { 
+          type: 'AI', 
+          content: res.aiMessage,
+          audioUrl: res.audioUrl
+        }],
         isChatLoading: false
       }));
     } catch (error) {
-      console.error(error);
+      console.error("메시지 전송 실패:", error);
       set((state) => ({
-        messages: [...state.messages, { type: 'AI', content: "서버 연결에 실패했습니다." }],
+        messages: [...state.messages, { type: 'AI', content: "오류가 발생했습니다." }],
         isChatLoading: false
       }));
     }
   },
-
-  // 타이머 및 세션 자동 전환
-  currentMode: "CLASS",
-  timeLeft: SESSION_MODES.CLASS.defaultTime,
-  isTimerRunning: false,
 
   setSessionMode: (modeKey) => {
     const config = SESSION_MODES[modeKey];
@@ -100,42 +111,23 @@ const useStudyStore = create((set, get) => ({
     });
   },
 
-  // 1초씩 감소 + 0초가 되면 다음 단계로 이동
   tick: () => {
     const { timeLeft, currentMode } = get();
-
     if (timeLeft > 0) {
       set({ timeLeft: timeLeft - 1 });
     } else {
-      // 시간이 0이 되었을 때 다음 단계 로직
       get().handleSessionEnd(currentMode);
     }
   },
 
-  // 세션 종료 시 자동 진행
   handleSessionEnd: (mode) => {
     if (mode === "CLASS") {
-      // 수업 끝 -> 휴식 시작
       set((state) => ({
-        messages: [...state.messages, { type: 'AI', content: "50분 수업이 끝났습니다! 잠시 휴식할까요?" }]
+        messages: [...state.messages, { type: 'AI', content: "수업 시간이 끝났어요! 잠시 쉬었다 할까요?" }]
       }));
       get().setSessionMode("BREAK");
-    } 
-    else if (mode === "BREAK") {
-      // 휴식 끝 -> 테스트 시작
-      set((state) => ({
-        messages: [...state.messages, { type: 'AI', content: "휴식 끝! 이제 배운 내용을 테스트해보겠습니다." }]
-      }));
-      get().setSessionMode("TEST");
     }
-    else if (mode === "TEST") {
-      // 테스트 끝 -> 피드백
-      set((state) => ({
-        messages: [...state.messages, { type: 'AI', content: "테스트 종료! 결과를 분석해 드릴게요." }]
-      }));
-      get().setSessionMode("FEEDBACK");
-    }
-  }
+  },
 }));
 
 export default useStudyStore;
