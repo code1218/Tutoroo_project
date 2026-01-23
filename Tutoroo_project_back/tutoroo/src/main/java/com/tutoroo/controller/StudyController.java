@@ -27,9 +27,13 @@ public class StudyController {
 
     @GetMapping("/status")
     @Operation(summary = "현재 학습 상태 조회", description = "메인 화면에서 현재 진행 중인 플랜의 상태와 진도율을 조회합니다.")
-    public ResponseEntity<StudyDTO.StudyStatusResponse> getStudyStatus(@AuthenticationPrincipal CustomUserDetails user) {
+    public ResponseEntity<StudyDTO.StudyStatusResponse> getStudyStatus(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestParam(required = false) Long planId // [New] 선택사항
+    ) {
         if (user == null) throw new TutorooException(ErrorCode.UNAUTHORIZED_ACCESS);
-        return ResponseEntity.ok(studyService.getCurrentStudyStatus(user.getId()));
+        // Service 메서드에 planId 전달
+        return ResponseEntity.ok(studyService.getCurrentStudyStatus(user.getId(), planId));
     }
 
     /**

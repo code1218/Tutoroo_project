@@ -72,27 +72,35 @@ public class StudyService {
 
     // --- [2] 현재 학습 상태 요약 (메인 홈 위젯용) ---
     @Transactional(readOnly = true)
-    public StudyDTO.StudyStatusResponse getCurrentStudyStatus(Long userId) {
+    public StudyDTO.StudyStatusResponse getCurrentStudyStatus(Long userId, Long planId) {
         List<StudyPlanEntity> plans = studyMapper.findActivePlansByUserId(userId);
         if (plans.isEmpty()) return null;
 
-        StudyPlanEntity currentPlan = plans.get(0);
+        // [핵심] planId가 있으면 해당 플랜을 찾고, 없으면 첫 번째 플랜 사용
+        StudyPlanEntity currentPlan = plans.stream()
+                .filter(p -> planId == null || p.getId().equals(planId))
+                .findFirst()
+                .orElse(plans.get(0));
 
         // 오늘 학습 완료 여부 체크
         List<StudyLogEntity> todayLogs = studyMapper.findLogsByUserIdAndDate(userId, LocalDate.now());
-        boolean isResting = !todayLogs.isEmpty() && todayLogs.stream().anyMatch(StudyLogEntity::getIsCompleted);
+        // 해당 플랜에 대한 로그만 필터링 (정확도를 위해)
+        boolean isResting = !todayLogs.isEmpty() && todayLogs.stream()
+                .filter(log -> log.getPlanId().equals(currentPlan.getId()))
+                .anyMatch(StudyLogEntity::getIsCompleted);
 
-        // 마지막 학습 주제 가져오기
+        // 현재 플랜의 총 로그 수 계산 (진도 dayCount)
+        // (간단하게 구현하기 위해 전체 로그 조회 대신 기존 로직 활용하되, 정확한 DayCount 로직 필요 시 DB 쿼리 권장)
+        // 여기서는 기존 로직 유지하되 currentPlan 정보를 사용
         String lastTopic = todayLogs.isEmpty() ? "새로운 학습을 시작해보세요!" : todayLogs.get(0).getContentSummary();
 
         return StudyDTO.StudyStatusResponse.builder()
                 .planId(currentPlan.getId())
                 .goal(currentPlan.getGoal())
                 .personaName(currentPlan.getPersona())
-                // 로그 수 + 1일차 (단순 계산, 필요 시 DB max(day_count) 사용)
-                .currentDay(todayLogs.size() + 1)
+                .currentDay(studyMapper.findLogsByPlanId(currentPlan.getId()).size() + 1) // [수정] 해당 플랜의 진도 계산
                 .progressRate(currentPlan.getProgressRate())
-                .isResting(isResting) // Step 7: 쉬는 시간 상태 반영
+                .isResting(isResting)
                 .lastTopic(lastTopic)
                 .build();
     }
