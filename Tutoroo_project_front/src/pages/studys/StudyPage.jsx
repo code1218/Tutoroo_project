@@ -5,7 +5,6 @@ import SessionStatus from "../../components/studys/SessionStatus";
 import useStudyStore from "../../stores/useStudyStore";
 import { studyApi } from "../../apis/studys/studysApi"; 
 import * as s from "./styles";
-
 import tigerImg from "../../assets/images/mascots/logo_tiger.png";
 import turtleImg from "../../assets/images/mascots/logo_turtle.png";
 import rabbitImg from "../../assets/images/mascots/logo_rabbit.png";
@@ -32,7 +31,7 @@ function StudyPage() {
     currentMode,
     planId,
     studyDay,
-    initializeStudySession // [New] 초기화 액션
+    initializeStudySession 
   } = useStudyStore();
 
   const [inputText, setInputText] = useState("");
@@ -44,21 +43,14 @@ function StudyPage() {
 
   const currentTutorImage = TUTOR_IMAGES[selectedTutorId] || tigerImg;
 
-  // --- [핵심 변경] 페이지 진입 시 내 정보로 수업 자동 초기화 ---
   useEffect(() => {
-    // 메시지가 비어있거나, 플랜 정보가 없으면 초기화 실행
     initializeStudySession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
-  // --- 1. 스크롤 자동 이동 ---
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isChatLoading, isRecording]);
 
-  // --- 2. TTS 자동 재생 ---
   useEffect(() => {
     if (messages.length > 0 && isSpeakerOn) {
       const lastMsg = messages[messages.length - 1];
@@ -72,7 +64,6 @@ function StudyPage() {
     }
   }, [messages, isSpeakerOn]);
 
-  // --- 3. 메시지 전송 ---
   const handleSend = () => {
     if (!inputText.trim() || isChatLoading) return;
     sendMessage(inputText);
@@ -80,57 +71,40 @@ function StudyPage() {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-      handleSend();
-    }
+    if (e.key === "Enter" && !e.nativeEvent.isComposing) handleSend();
   };
 
-  // --- 4. STT (음성 인식) ---
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
-
       mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
-
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/mp3" });
         setIsRecording(false);
-        
         try {
           const text = await studyApi.uploadAudio(audioBlob);
-          if (text) {
-              setInputText(text); 
-          }
+          if (text) setInputText(text); 
         } catch (e) {
             console.error("STT Error", e);
             alert("음성 인식에 실패했습니다.");
         }
-        
         stream.getTracks().forEach(track => track.stop());
       };
-
       mediaRecorderRef.current.start();
       setIsRecording(true);
-
     } catch (e) {
-      console.error("Mic Access Error", e);
       alert("마이크 접근 권한이 필요합니다.");
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-    }
+    if (mediaRecorderRef.current && isRecording) mediaRecorderRef.current.stop();
   };
 
-  // --- 5. PDF 다운로드 ---
   const handleDownloadPdf = async () => {
     try {
         const blob = await studyApi.downloadReviewPdf(planId, studyDay);
@@ -153,7 +127,6 @@ function StudyPage() {
         <main css={s.chatArea} ref={scrollRef}>
           {messages.length === 0 ? (
             <div css={s.placeholder}>
-              {/* 로딩 중일 때 표시할 텍스트 */}
               <p>내 학습 정보를 불러오는 중입니다...</p>
             </div>
           ) : (
@@ -173,61 +146,35 @@ function StudyPage() {
               );
             })
           )}
-          
           {(isChatLoading || isRecording) && (
             <div css={s.messageRow(false)}>
               <div css={s.aiProfileIcon}>
                 <img src={currentTutorImage} alt="tutor" />
               </div>
               <div css={s.bubble(false)}>
-                {isRecording ? (
-                    <span css={s.recordingPulse}>🎤 듣고 있어요...</span>
-                ) : (
-                    <span className="dot-flashing">...</span>
-                )}
+                {isRecording ? <span css={s.recordingPulse}>🎤 듣고 있어요...</span> : <span className="dot-flashing">...</span>}
               </div>
             </div>
           )}
         </main>
-
         <footer css={s.bottomArea}>
             <div css={s.bottomInner}>
                 <SessionStatus />
-
                 <div css={s.controlToolbar}>
-                    {/* 1. 스피커 토글 */}
-                    <button 
-                        css={s.iconBtn(isSpeakerOn)} 
-                        onClick={toggleSpeaker}
-                        title={isSpeakerOn ? "TTS 끄기" : "TTS 켜기"}
-                    >
+                    <button css={s.iconBtn(isSpeakerOn)} onClick={toggleSpeaker} title={isSpeakerOn ? "TTS 끄기" : "TTS 켜기"}>
                         {isSpeakerOn ? "🔊" : "🔇"}
                     </button>
-
-                    {/* 2. 마이크 (STT) */}
                     <button 
                         css={s.iconBtn(isRecording)} 
-                        onMouseDown={startRecording}
-                        onMouseUp={stopRecording}
-                        onTouchStart={startRecording} 
-                        onTouchEnd={stopRecording}
-                        title="누르고 말하기"
+                        onMouseDown={startRecording} onMouseUp={stopRecording}
+                        onTouchStart={startRecording} onTouchEnd={stopRecording}
                     >
                         {isRecording ? "🔴" : "🎤"}
                     </button>
-
-                    {/* 3. 복습 자료 다운로드 */}
                     {currentMode === 'REVIEW' && (
-                        <button 
-                            css={s.textBtn} 
-                            onClick={handleDownloadPdf}
-                            disabled={isChatLoading} 
-                        >
-                            📄 자료 다운
-                        </button>
+                        <button css={s.textBtn} onClick={handleDownloadPdf} disabled={isChatLoading}>📄 자료 다운</button>
                     )}
                 </div>
-
                 <div css={s.inputWrapper}>
                     <input 
                       type="text" 
@@ -240,13 +187,7 @@ function StudyPage() {
                       autoFocus
                     />
                 </div>
-                <button 
-                  css={s.sendBtn} 
-                  onClick={handleSend}
-                  disabled={isChatLoading || isRecording}
-                >
-                  전송
-                </button>
+                <button css={s.sendBtn} onClick={handleSend} disabled={isChatLoading || isRecording}>전송</button>
             </div>
         </footer>
       </div>

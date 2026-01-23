@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useStudyStore from "../../stores/useStudyStore";
 import * as s from "./styles";
+// 이미지 import 유지
 import tigerImg from "../../assets/images/mascots/logo_tiger.png";
 import turtleImg from "../../assets/images/mascots/logo_turtle.png";
 import rabbitImg from "../../assets/images/mascots/logo_rabbit.png";
@@ -20,21 +21,22 @@ const TUTORS = [
 const TutorSelectionPage = () => {
   const navigate = useNavigate();
   
-  // Store에서 상태 및 함수 가져오기
-  const { studyDay, loadUserStatus, startClassSession, isLoading } = useStudyStore();
+  const { studyDay, loadUserStatus, startClassSession, isLoading, planId } = useStudyStore();
   
   const [activeTutorId, setActiveTutorId] = useState("TIGER");
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customInput, setCustomInput] = useState("");
 
-  // 페이지 진입 시 최신 학습 상태(Day) 로드
   useEffect(() => {
-    loadUserStatus();
-  }, [loadUserStatus]);
+    if (planId) {
+        loadUserStatus(planId);
+    } else {
+        // planId가 없다면(새로고침 등) 기본값 로드
+        loadUserStatus();
+    }
+  }, [loadUserStatus, planId]);
 
   const activeTutor = TUTORS.find((t) => t.id === activeTutorId);
-
-  // 1일차 여부 확인
   const isDayOne = studyDay === 1;
 
   const handleTutorClick = (id) => {
@@ -50,18 +52,15 @@ const TutorSelectionPage = () => {
     setIsCustomMode((prev) => !prev);
   };
 
-  // 수업 시작 핸들러
   const handleStart = () => {
     if (isLoading) return;
 
-    // 선택된 정보 구성
     const tutorInfo = {
         id: activeTutorId,
         isCustom: isCustomMode,
         customRequirement: isCustomMode ? customInput : null
     };
 
-    // Store 액션 호출 (API 연동)
     startClassSession(tutorInfo, navigate);
   };
 
@@ -70,7 +69,6 @@ const TutorSelectionPage = () => {
       <h2 css={s.title}>오늘 함께할 선생님을 선택해주세요 ({studyDay}일차)</h2>
 
       <div css={s.contentWrap}>
-        {/* [좌측] 선생님 리스트 */}
         <div css={s.listPanel}>
           {TUTORS.map((tutor) => (
             <div
@@ -84,7 +82,6 @@ const TutorSelectionPage = () => {
             </div>
           ))}
 
-          {/* 커스텀 버튼: 1일차일 경우 스타일 변경 및 클릭 시 alert */}
           <div 
             css={[
                 s.customBtn(isCustomMode), 
@@ -98,7 +95,6 @@ const TutorSelectionPage = () => {
           </div>
         </div>
 
-        {/* [우측] 상세 설명 패널 */}
         <div css={s.detailPanel}>
           {isCustomMode ? (
             <div css={s.infoBox}>
