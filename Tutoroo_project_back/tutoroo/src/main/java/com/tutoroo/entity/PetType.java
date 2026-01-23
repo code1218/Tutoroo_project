@@ -4,8 +4,9 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
- * [기능: 육성 가능한 다마고치 종류 (10마리)]
+ * [기능: 육성 가능한 다마고치 종류 (11마리)]
  * 설명: 멤버십 등급에 따라 해금되며, 유저가 포인트로 키우는 대상입니다.
+ * 수정: CUSTOM(커스텀) 타입 추가
  */
 @Getter
 @RequiredArgsConstructor
@@ -25,7 +26,10 @@ public enum PetType {
     // Premium (프리미엄)
     ROCK_HYRAX("바위너구리", "작지만 친구가 많은 인싸 너구리"),
     PANDA("팬더", "대나무를 좋아하는 귀차니즘 팬더"),
-    WESTERN_DRAGON("서양용", "황금을 지키는 강력한 드래곤");
+    WESTERN_DRAGON("서양용", "황금을 지키는 강력한 드래곤"),
+
+    // [New] Custom (졸업 후 생성 가능)
+    CUSTOM("커스텀 펫", "세상에 하나뿐인 나만의 펫");
 
     private final String name;
     private final String description;

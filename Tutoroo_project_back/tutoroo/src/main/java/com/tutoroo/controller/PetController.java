@@ -58,4 +58,14 @@ public class PetController {
             @RequestBody PetDTO.InteractionRequest request) {
         return ResponseEntity.ok(petService.interact(user.getId(), request.actionType()));
     }
+
+    // 7. [New] 커스텀 펫 생성 (Step 20)
+    // 졸업 조건을 만족해야 호출 가능합니다.
+    @PostMapping("/create-custom")
+    public ResponseEntity<String> createCustomPet(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestBody PetDTO.CustomPetCreateRequest request) {
+        petService.createCustomPet(user.getId(), request);
+        return ResponseEntity.ok("나만의 커스텀 펫이 탄생했습니다!");
+    }
 }

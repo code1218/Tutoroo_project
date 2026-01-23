@@ -22,15 +22,19 @@
 
     <insert id="createPet" parameterType="com.tutoroo.entity.PetInfoEntity" useGeneratedKeys="true" keyProperty="petId">
         INSERT INTO pet_info (
-            user_id, pet_name, pet_type, stage, status,
+            user_id, pet_name, pet_type,
+            custom_description, custom_image_url,
+            stage, status,
             fullness, intimacy, exp,
             cleanliness, stress, energy, is_sleeping,
             created_at, last_fed_at, last_played_at, last_cleaned_at, last_slept_at
         ) VALUES (
-                     #{userId}, #{petName}, #{petType}, #{stage}, 'ACTIVE',
+                     #{userId}, #{petName}, #{petType},
+                     #{customDescription}, #{customImageUrl},
+                     #{stage}, #{status},
                      #{fullness}, #{intimacy}, #{exp},
-                     100, 0, 100, false,
-                     NOW(), NOW(), NOW(), NOW(), NULL
+                     #{cleanliness}, #{stress}, #{energy}, #{isSleeping},
+                     #{createdAt}, #{lastFedAt}, #{lastPlayedAt}, #{lastCleanedAt}, #{lastSleptAt}
                  )
     </insert>
 
@@ -48,6 +52,8 @@
             status = #{status},
             pet_type = #{petType},
             pet_name = #{petName},
+            custom_description = #{customDescription},
+            custom_image_url = #{customImageUrl},
             equipped_items = #{equippedItems},
             last_fed_at = #{lastFedAt},
             last_played_at = #{lastPlayedAt},
@@ -65,7 +71,7 @@
         VALUES (#{petId}, #{date}, #{content}, #{mood}, NOW())
     </insert>
 
-    <select id="findSkillEffect" resultType="double">
+    <select id="findSkillEffect" resultType="Double">
         SELECT effect_value FROM pet_skills
         WHERE pet_type = #{petType} AND skill_code = #{skillCode}
     </select>

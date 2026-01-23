@@ -4,12 +4,12 @@
 
     <insert id="save" parameterType="com.tutoroo.entity.UserEntity" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO users (
-            username, password, name, email, phone, parent_phone, age, gender,
+            username, password, name, nickname, email, phone, parent_phone, age, gender,
             role, provider, provider_id, membership_tier, total_point, point_balance,
             level, exp, profile_image, current_streak, last_study_date,
             status, created_at, updated_at
         ) VALUES (
-                     #{username}, #{password}, #{name}, #{email}, #{phone}, #{parentPhone}, #{age}, #{gender},
+                     #{username}, #{password}, #{name}, #{nickname}, #{email}, #{phone}, #{parentPhone}, #{age}, #{gender},
                      #{role}, #{provider}, #{providerId}, #{membershipTier}, #{totalPoint}, #{pointBalance},
                      #{level}, #{exp}, #{profileImage}, 0, NULL,
                      'ACTIVE', NOW(), NOW()
@@ -30,30 +30,31 @@
 
     <update id="update" parameterType="com.tutoroo.entity.UserEntity">
         UPDATE users
-        SET
-            password        = COALESCE(#{password}, password),
-            name            = COALESCE(#{name}, name),
-            email           = COALESCE(#{email}, email),
-            username        = COALESCE(#{username}, username), phone           = COALESCE(#{phone}, phone),
-            parent_phone    = COALESCE(#{parentPhone}, parent_phone),
-            profile_image   = COALESCE(#{profileImage}, profile_image),
-            membership_tier = COALESCE(#{membershipTier}, membership_tier),
+        <set>
+            <if test="password != null">password = #{password},</if>
+            <if test="name != null">name = #{name},</if>
+            <if test="nickname != null">nickname = #{nickname},</if> <if test="email != null">email = #{email},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="parentPhone != null">parent_phone = #{parentPhone},</if>
+            <if test="profileImage != null">profile_image = #{profileImage},</if>
+            <if test="age != null">age = #{age},</if>
 
-            total_point     = COALESCE(#{totalPoint}, total_point),
-            point_balance   = COALESCE(#{pointBalance}, point_balance),
-            level           = COALESCE(#{level}, level),
-            exp             = COALESCE(#{exp}, exp),
-            age             = COALESCE(#{age}, age),
+            <if test="membershipTier != null">membership_tier = #{membershipTier},</if>
+            <if test="totalPoint != null">total_point = #{totalPoint},</if>
+            <if test="pointBalance != null">point_balance = #{pointBalance},</if>
+            <if test="level != null">level = #{level},</if>
+            <if test="exp != null">exp = #{exp},</if>
 
-            current_streak  = COALESCE(#{currentStreak}, current_streak),
-            last_study_date = COALESCE(#{lastStudyDate}, last_study_date),
-            rival_id        = COALESCE(#{rivalId}, rival_id),
+            <if test="currentStreak != null">current_streak = #{currentStreak},</if>
+            <if test="lastStudyDate != null">last_study_date = #{lastStudyDate},</if>
+            <if test="rivalId != null">rival_id = #{rivalId},</if>
 
-            status          = COALESCE(#{status}, status),
-            withdrawal_reason = COALESCE(#{withdrawalReason}, withdrawal_reason),
-            deleted_at      = COALESCE(#{deletedAt}, deleted_at),
+            <if test="status != null">status = #{status},</if>
+            <if test="withdrawalReason != null">withdrawal_reason = #{withdrawalReason},</if>
+            <if test="deletedAt != null">deleted_at = #{deletedAt},</if>
 
-            updated_at      = NOW()
+            updated_at = NOW()
+        </set>
         WHERE id = #{id}
     </update>
 
@@ -83,6 +84,8 @@
     <update id="updateSocialUser">
         UPDATE users
         SET
+            name = #{name},
+            nickname = #{nickname},
             phone = #{phone},
             parent_phone = #{parentPhone},
             age = #{age},
@@ -96,13 +99,15 @@
         UPDATE users
         SET total_point = total_point + #{amount},
             point_balance = point_balance + #{amount},
-            exp = exp + #{amount}
+            exp = exp + #{amount},
+            updated_at = NOW()
         WHERE id = #{userId}
     </update>
 
     <update id="spendPoints">
         UPDATE users
-        SET point_balance = point_balance - #{amount}
+        SET point_balance = point_balance - #{amount},
+            updated_at = NOW()
         WHERE id = #{userId} AND point_balance >= #{amount}
     </update>
 
@@ -111,7 +116,8 @@
             JOIN study_plans p ON u.id = p.user_id
             SET u.total_point = u.total_point + #{point},
                 u.point_balance = u.point_balance + #{point},
-                u.exp = u.exp + #{point}
+                u.exp = u.exp + #{point},
+                u.updated_at = NOW()
         WHERE p.id = #{planId}
     </update>
 

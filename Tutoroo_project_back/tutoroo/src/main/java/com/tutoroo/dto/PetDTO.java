@@ -13,14 +13,15 @@ public class PetDTO {
             int fullness,
             int intimacy,
             int exp,
-            int maxExp, // 다음 단계까지 필요한 경험치 (UI 게이지용)
+            int maxExp,
             int cleanliness,
             int stress,
             int energy,
             boolean isSleeping,
             int stage,
             String petType,
-            String status, // ACTIVE, GRADUATED
+            String customImageUrl, // [New] 커스텀 이미지
+            String status,
             String statusMessage
     ) {}
 
@@ -29,34 +30,41 @@ public class PetDTO {
             String actionType // FEED, PLAY, CLEAN, SLEEP, WAKE_UP
     ) {}
 
-    // 3. 입양 가능한 펫 목록 응답 (초기 입양용)
+    // 3. 입양 가능한 펫 목록 응답
     @Builder
     public record AdoptableListResponse(
             List<PetSummary> availablePets,
-            String message // "회원님의 등급(BASIC)에서는 3마리 중 선택 가능합니다."
+            String message
     ) {}
 
     @Builder
     public record PetSummary(
-            String type,        // Enum Name
-            String name,        // 한글 이름
-            String description  // 설명
+            String type,
+            String name,
+            String description
     ) {}
 
     // 4. 초기 입양 요청
     public record InitialAdoptRequest(
-            String petType // 사용자가 선택한 종족
+            String petType
     ) {}
 
     // 5. 졸업 후 랜덤 알 후보 응답
     @Builder
     public record RandomEggResponse(
-            List<PetSummary> candidates, // 알 후보 (Basic은 1개, Prem은 3개)
-            int choiceCount // 선택 가능한 개수
+            List<PetSummary> candidates,
+            int choiceCount
     ) {}
 
-    // 6. 알 선택 요청
+    // 6. 알 선택 및 부화 요청
     public record EggSelectRequest(
             String selectedPetType
+    ) {}
+
+    // 7. [수정] 커스텀 펫 생성 요청 (변수명 Entity와 통일)
+    public record CustomPetCreateRequest(
+            String petName,           // 기존 name -> petName 수정
+            String customDescription, // 기존 description -> customDescription 수정
+            String baseType           // 프롬프트 보조용 (예: CAT)
     ) {}
 }
