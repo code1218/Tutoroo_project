@@ -44,12 +44,10 @@ public class StudyService {
     public StudyDTO.PlanDetailResponse getCurrentPlanDetail(Long userId) {
         List<StudyPlanEntity> plans = studyMapper.findActivePlansByUserId(userId);
         if (plans.isEmpty()) {
-            // 활성 플랜이 없으면 null 반환 (프론트에서 '플랜 생성하기' 버튼 노출)
             return null;
         }
         StudyPlanEntity currentPlan = plans.get(0);
 
-        // JSON 로드맵 파싱 (예외 발생 시 로그 남기고 null 처리하여 UI 오류 방지)
         AssessmentDTO.RoadmapData roadmapData = null;
         try {
             if (StringUtils.hasText(currentPlan.getRoadmapJson())) {
@@ -76,29 +74,23 @@ public class StudyService {
         List<StudyPlanEntity> plans = studyMapper.findActivePlansByUserId(userId);
         if (plans.isEmpty()) return null;
 
-        // [핵심] planId가 있으면 해당 플랜을 찾고, 없으면 첫 번째 플랜 사용
         StudyPlanEntity currentPlan = plans.stream()
                 .filter(p -> planId == null || p.getId().equals(planId))
                 .findFirst()
                 .orElse(plans.get(0));
 
-        // 오늘 학습 완료 여부 체크
         List<StudyLogEntity> todayLogs = studyMapper.findLogsByUserIdAndDate(userId, LocalDate.now());
-        // 해당 플랜에 대한 로그만 필터링 (정확도를 위해)
         boolean isResting = !todayLogs.isEmpty() && todayLogs.stream()
                 .filter(log -> log.getPlanId().equals(currentPlan.getId()))
                 .anyMatch(StudyLogEntity::getIsCompleted);
 
-        // 현재 플랜의 총 로그 수 계산 (진도 dayCount)
-        // (간단하게 구현하기 위해 전체 로그 조회 대신 기존 로직 활용하되, 정확한 DayCount 로직 필요 시 DB 쿼리 권장)
-        // 여기서는 기존 로직 유지하되 currentPlan 정보를 사용
         String lastTopic = todayLogs.isEmpty() ? "새로운 학습을 시작해보세요!" : todayLogs.get(0).getContentSummary();
 
         return StudyDTO.StudyStatusResponse.builder()
                 .planId(currentPlan.getId())
                 .goal(currentPlan.getGoal())
                 .personaName(currentPlan.getPersona())
-                .currentDay(studyMapper.findLogsByPlanId(currentPlan.getId()).size() + 1) // [수정] 해당 플랜의 진도 계산
+                .currentDay(studyMapper.findLogsByPlanId(currentPlan.getId()).size() + 1)
                 .progressRate(currentPlan.getProgressRate())
                 .isResting(isResting)
                 .lastTopic(lastTopic)
@@ -111,7 +103,6 @@ public class StudyService {
         StudyPlanEntity plan = studyMapper.findById(request.planId());
         if (plan == null) throw new TutorooException(ErrorCode.STUDY_PLAN_NOT_FOUND);
 
-        // 1. 로그 저장
         StudyLogEntity logEntity = StudyLogEntity.builder()
                 .planId(plan.getId())
                 .studyDate(LocalDateTime.now())
@@ -119,14 +110,12 @@ public class StudyService {
                 .contentSummary(request.contentSummary())
                 .testScore(request.score())
                 .isCompleted(request.isCompleted())
-                .pointChange(request.score() > 0 ? request.score() : 10) // 점수만큼 포인트 or 기본 10
+                .pointChange(request.score() > 0 ? request.score() : 10)
                 .build();
         studyMapper.saveLog(logEntity);
 
-        // 2. 유저 포인트 지급 (Step 17)
         userMapper.earnPoints(userId, logEntity.getPointChange());
 
-        // 3. 진도율 자동 계산 및 업데이트
         int newProgress = calculateProgress(plan, request.dayCount());
         updateProgress(plan.getId(), newProgress);
 
@@ -139,8 +128,16 @@ public class StudyService {
         List<StudyPlanEntity> plans = studyMapper.findActivePlansByUserId(userId);
         if (plans.isEmpty()) throw new TutorooException(ErrorCode.STUDY_PLAN_NOT_FOUND);
 
-        // TutorService의 AI 채팅 로직 호출 (Redis 기억하기 기능 포함)
-        TutorDTO.FeedbackChatResponse tutorResponse = tutorService.adjustCurriculum(userId, plans.get(0).getId(), message);
+        // [에러 수정 부분]
+        // TutorService.adjustCurriculum 메서드가 'needsTts' 파라미터를 요구하도록 변경되었으므로
+        // 여기서도 값을 넘겨줘야 합니다.
+        // * Simple Chat은 현재 TTS On/Off 플래그를 받지 않으므로 기본값 true(생성함)를 전달합니다.
+        TutorDTO.FeedbackChatResponse tutorResponse = tutorService.adjustCurriculum(
+                userId,
+                plans.get(0).getId(),
+                message,
+                true // [Fix] needsTts 기본값 (true) 전달
+        );
 
         return StudyDTO.ChatResponse.builder()
                 .aiMessage(tutorResponse.aiResponse())
@@ -155,7 +152,6 @@ public class StudyService {
                 .map(plan -> StudyDTO.StudySimpleInfo.builder()
                         .id(plan.getId())
                         .name(plan.getGoal())
-                        // 커스텀 이름이 있으면 우선 표시, 없으면 페르소나 이름 표시
                         .tutor(StringUtils.hasText(plan.getCustomTutorName()) ? plan.getCustomTutorName() : plan.getPersona())
                         .build())
                 .collect(Collectors.toList());
@@ -169,7 +165,6 @@ public class StudyService {
             throw new TutorooException("존재하지 않는 학습 플랜입니다.", ErrorCode.STUDY_PLAN_NOT_FOUND);
         }
 
-        // 본인 확인
         if (!plan.getUserId().equals(userId)) {
             throw new TutorooException("본인의 학습 플랜만 삭제할 수 있습니다.", ErrorCode.UNAUTHORIZED_ACCESS);
         }
@@ -183,7 +178,6 @@ public class StudyService {
     public StudyDTO.CalendarResponse getMonthlyCalendar(Long userId, int year, int month) {
         List<StudyLogEntity> logs = studyMapper.findLogsByUserIdAndMonth(userId, year, month);
 
-        // 날짜별 그룹화
         var logsByDay = logs.stream()
                 .collect(Collectors.groupingBy(log -> log.getStudyDate().getDayOfMonth()));
 
@@ -194,11 +188,9 @@ public class StudyService {
             int day = entry.getKey();
             List<StudyLogEntity> dayLogs = entry.getValue();
 
-            // 하루라도 완료(isCompleted=true) 기록이 있으면 출석 인정
             boolean isDone = dayLogs.stream().anyMatch(StudyLogEntity::getIsCompleted);
             if (isDone) totalStudyDays++;
 
-            // 그 날의 최고 점수 및 대표 주제 추출
             int maxScore = dayLogs.stream()
                     .mapToInt(l -> l.getTestScore() != null ? l.getTestScore() : 0)
                     .max().orElse(0);
@@ -250,21 +242,18 @@ public class StudyService {
 
     // [New] 스마트 진도율 계산 로직
     private int calculateProgress(StudyPlanEntity plan, int currentDay) {
-        // 1. 종료일이 없으면 기본 30일 기준으로 계산
         if (plan.getEndDate() == null || plan.getStartDate() == null) {
             return Math.min(100, (int) ((double) currentDay / 30.0 * 100));
         }
 
-        // 2. 전체 기간 계산 (종료일 - 시작일)
         long totalDays = ChronoUnit.DAYS.between(plan.getStartDate(), plan.getEndDate());
-        if (totalDays <= 0) totalDays = 1; // 0으로 나누기 방지
+        if (totalDays <= 0) totalDays = 1;
 
-        // 3. 퍼센트 계산
         int percent = (int) ((double) currentDay / totalDays * 100);
-        return Math.min(100, Math.max(0, percent)); // 0~100 사이로 보정
+        return Math.min(100, Math.max(0, percent));
     }
 
-    // --- Redis 세션 관리 (Step 7: 학습 중 상태 유지) ---
+    // --- Redis 세션 관리 ---
     public void saveSessionState(Long planId, String stateJson) {
         String key = "session:" + planId;
         redisTemplate.opsForValue().set(key, stateJson, 24, TimeUnit.HOURS);

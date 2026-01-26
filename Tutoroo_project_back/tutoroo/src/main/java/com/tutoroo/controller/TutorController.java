@@ -19,6 +19,7 @@ public class TutorController {
     private final TutorService tutorService;
     private final UserService userService;
 
+    // 1. 수업 시작 (DTO 내부에 needsTts가 포함되어 서비스로 전달됨)
     @PostMapping("/class/start")
     public ResponseEntity<TutorDTO.ClassStartResponse> startClass(
             @AuthenticationPrincipal CustomUserDetails user,
@@ -50,6 +51,7 @@ public class TutorController {
         ));
     }
 
+    // [수정 포인트] 채팅 시 needsTts 값 전달 추가
     @PostMapping("/feedback/chat")
     public ResponseEntity<TutorDTO.FeedbackChatResponse> chatWithTutor(
             @AuthenticationPrincipal CustomUserDetails user,
@@ -58,7 +60,8 @@ public class TutorController {
         return ResponseEntity.ok(tutorService.adjustCurriculum(
                 user.userEntity().getId(),
                 request.planId(),
-                request.message()
+                request.message(),
+                request.needsTts() // [New] 서비스 메서드 변경에 따라 인자 추가
         ));
     }
 
