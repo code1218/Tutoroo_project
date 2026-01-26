@@ -30,7 +30,9 @@ const useStudyStore = create((set, get) => ({
   planId: null,     
   studyGoal: "",   
   isLoading: false,
-  selectedTutorId: "tiger",
+  
+  // [수정] 기본 튜터를 'kangaroo'로 변경 (대소문자 일치)
+  selectedTutorId: "kangaroo",
   
   messages: [],
   isChatLoading: false,
@@ -45,7 +47,7 @@ const useStudyStore = create((set, get) => ({
   currentStepIndex: 0,
   sessionSchedule: {},
 
-  //대시보드에서 플랜 정보(이름 포함) 설정
+  // 대시보드에서 플랜 정보(이름 포함) 설정
   setPlanInfo: (planId, goal) => {
     set({ planId, studyGoal: goal });
   },
@@ -64,7 +66,8 @@ const useStudyStore = create((set, get) => ({
         studyDay: data.currentDay || 1, 
         planId: data.planId, 
         studyGoal: data.goal, 
-        selectedTutorId: data.personaName ? data.personaName.toLowerCase() : "tiger" 
+        // [수정] 서버 데이터가 없으면 기본값 'kangaroo' 사용 및 소문자 변환
+        selectedTutorId: data.personaName ? data.personaName.toLowerCase() : "kangaroo" 
       }); 
     } catch (error) {
       console.error("로드 실패:", error);
@@ -74,16 +77,23 @@ const useStudyStore = create((set, get) => ({
   },
 
   initializeStudySession: async () => {
+    // [최적화] 이미 startClassSession을 통해 메시지가 로드되었다면 API 중복 호출 방지
+    const currentMessages = get().messages;
+    if (currentMessages.length > 0 && get().currentMode === "CLASS") {
+        return; 
+    }
+
     set({ isLoading: true, isChatLoading: true });
     try {
-        const { planId, studyDay, selectedTutorId } = get();
+        const { planId, studyDay, selectedTutorId, isSpeakerOn } = get();
 
-        // 수업 시작 요청 (studyGoal은 이미 setPlanInfo로 설정됨)
+        // 수업 시작 요청
         const classRes = await studyApi.startClass({
             planId: planId, 
             dayCount: studyDay,
             personaName: selectedTutorId.toUpperCase(), 
-            dailyMood: "HAPPY" 
+            dailyMood: "HAPPY",
+            needsTts: isSpeakerOn // [추가] TTS 생성 여부 전달
         });
 
         const aiSchedule = classRes.schedule || {};
@@ -165,7 +175,7 @@ const useStudyStore = create((set, get) => ({
   // 수동 수업 시작 
   startClassSession: async (tutorInfo, navigate) => {
     set({ isLoading: true });
-    const { planId, studyDay } = get();
+    const { planId, studyDay, isSpeakerOn } = get();
 
     if (!planId) {
         alert("학습 정보를 찾을 수 없습니다.");
@@ -178,15 +188,17 @@ const useStudyStore = create((set, get) => ({
       const res = await studyApi.startClass({
         planId: planId, 
         dayCount: studyDay,
-        personaName: tutorInfo.id.toUpperCase(), 
+        personaName: tutorInfo.id.toUpperCase(), // API 전송은 대문자
         dailyMood: "HAPPY",
-        customOption: tutorInfo.isCustom ? tutorInfo.customRequirement : null 
+        customOption: tutorInfo.isCustom ? tutorInfo.customRequirement : null,
+        needsTts: isSpeakerOn // [추가] TTS 생성 여부 전달
       });
       
       const aiSchedule = res.schedule || {};
 
       set({ 
-        selectedTutorId: tutorInfo.id,
+        // [핵심 수정] Store에는 소문자로 저장 (StudyPage 이미지 매핑용)
+        selectedTutorId: tutorInfo.id.toLowerCase(), 
         messages: [{
           type: 'AI',
           content: res.aiMessage,
@@ -212,8 +224,16 @@ const useStudyStore = create((set, get) => ({
   sendMessage: async (text) => {
       set((state) => ({ messages: [...state.messages, { type: 'USER', content: text }], isChatLoading: true }));
       try {
-          const res = await studyApi.sendChatMessage(text);
-          set((state) => ({ messages: [...state.messages, { type: 'AI', content: res.aiMessage, audioUrl: res.audioUrl }], isChatLoading: false }));
+          const { planId, isSpeakerOn } = get(); // 상태 가져오기
+
+          // [수정] 객체 형태로 인자 전달 및 needsTts 추가
+          const res = await studyApi.sendChatMessage({ 
+              planId, 
+              message: text, 
+              needsTts: isSpeakerOn 
+          });
+
+          set((state) => ({ messages: [...state.messages, { type: 'AI', content: res.aiResponse, audioUrl: res.audioUrl }], isChatLoading: false }));
       } catch (e) {
           set((state) => ({ messages: [...state.messages, { type: 'AI', content: "오류가 발생했습니다." }], isChatLoading: false }));
       }
