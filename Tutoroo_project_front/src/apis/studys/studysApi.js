@@ -20,14 +20,13 @@ export const studyApi = {
     return response.data;
   },
 
-  // 메시지 전송 (채팅) - [수정] needsTts 지원을 위해 TutorController 엔드포인트 사용
+  // 메시지 전송 (채팅) 
+  // [수정] needsTts를 지원하는 TutorController 엔드포인트로 변경
   sendChatMessage: async ({ planId, message, needsTts }) => {
-    // 기존 /api/study/chat/simple 은 needsTts를 받지 못하므로
-    // DTO 구조가 변경된 /api/tutor/feedback/chat 을 사용합니다.
     const response = await api.post("/api/tutor/feedback/chat", { 
       planId, 
       message, 
-      needsTts 
+      needsTts // [추가] TTS 생성 여부 (true/false)
     });
     return response.data;
   },
@@ -38,7 +37,8 @@ export const studyApi = {
     return response.data;
   },
 
-  // 수업 시작하기 - [수정] needsTts 파라미터 추가
+  // 수업 시작하기
+  // [수정] needsTts 파라미터 추가
   startClass: async ({ planId, dayCount, personaName, dailyMood, customOption, needsTts }) => {
     const response = await api.post("/api/tutor/class/start", {
       planId,
