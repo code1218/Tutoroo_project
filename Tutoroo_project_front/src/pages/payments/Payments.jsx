@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import * as s  from "./styles";
 import Header from "../../components/layouts/Header";
-import { FaCheck, FaCheckCircle } from "react-icons/fa";
+import { FaBan, FaCheck, FaCheckCircle } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -50,7 +50,7 @@ function Payments() {
                 const token = localStorage.getItem("accessToken");
                 if(!token) return ;
                     const response = await axios.get("http://localhost:8080/api/user/me", {
-                        header: { Authorization: `Bearer ${token}`}
+                        headers: { Authorization: `Bearer ${token}`}
                     });
 
                     console.log("서버 응답 데이터:", response.data);
@@ -72,7 +72,7 @@ function Payments() {
 
     const getCurrentPlanLevel = () => {
         const current = plans.find(p => p.id === currentSubscription) 
-        return current ? current : 0;
+        return current ? current.level : 0;
     }
 
     const handlePaymentClick = () => {
@@ -136,7 +136,7 @@ function Payments() {
 
                                 { 
                                     isCurrent ? (
-                                        <button css={s.currentPlanBtn} disabled>이용 중</button>
+                                        <button css={s.currentPlanbtn} disabled>이용 중</button>
                                     ) : isDisabled ? (
                                         <div style={{height: "45px"}}></div>
                                     ) : isSelected ? (
