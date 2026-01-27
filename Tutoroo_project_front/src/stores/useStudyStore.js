@@ -26,7 +26,6 @@ export const SESSION_MODES = {
 };
 
 const useStudyStore = create((set, get) => ({
-  // --- [State] 상태 변수들 ---
   studyDay: 1,      
   planId: null,
   studyGoal: "",     
