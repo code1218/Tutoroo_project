@@ -5,7 +5,7 @@ import { studyApi } from "../../apis/studys/studysApi";
 import { userApi } from "../../apis/users/usersApi";
 import Header from "../../components/layouts/Header";
 import ModalRoot from "../../components/modals/ModalRoot";
-
+import StudyChart from "../../components/charts/StudyChart";
 import useAuthStore from "../../stores/useAuthStore";
 import useModalStore from "../../stores/modalStore";
 import useStudyStore from "../../stores/useStudyStore";
@@ -35,6 +35,10 @@ function getWeekDates(offset = 0) {
     date.setDate(start.getDate() + i);
 
     return {
+      date,
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      day: date.getDate(),
       label: `${date.getDate()}일 (${DAY_NAMES[date.getDay()]})`,
       iso: toYmd(date),
       dateObj: date,
@@ -70,6 +74,10 @@ function DashboardPage() {
   const [showDetail, setShowDetail] = useState(false);
 
   const dates = getWeekDates(weekOffset);
+
+  // 차트 관련 상태
+  const [chartData, setChartData] = useState([]);
+  const [weeklyRate, setWeeklyRate] = useState(0);
 
   useEffect(() => {
     const todayIso = toYmd(new Date());
@@ -161,7 +169,62 @@ function DashboardPage() {
   // 데이터 조회 (대시보드 + 학습 목록)
   useEffect(() => {
     if (!user) return;
+    if (!showDetail) return;
 
+    const fetchChart = async () => {
+      try {
+        const ymSet = new Set(dates.map((d) => `${d.year}-${d.month}`));
+        const ymList = Array.from(ymSet).map((k) => {
+          const [year, month] = k.split("-").map(Number);
+          return { year: year, month: month };
+        });
+
+        const results = await Promise.all(
+          ymList.map(({ year, month }) =>
+            studyApi.getMonthlyCalendar({ year, month }),
+          ),
+        );
+
+        const mapByIso = {};
+        results.forEach((response) => {
+          const year = response.year;
+          const month = String(response.month).padStart(2, "0");
+          (response.logs || []).forEach((log) => {
+            const day = String(log.day).padStart(2, "0");
+            const iso = `${year}-${month}-${day}`;
+            mapByIso[iso] = {
+              isDone: !!log.isDone,
+              score: log.score ?? log.maxScore ?? 0,
+              topic: log.topic ?? "",
+            };
+          });
+        });
+
+        setDoneByIso(mapByIso);
+
+        const nextChart = dates.map((d) => {
+          const log = mapByIso[d.iso];
+          return {
+            label: `${d.month}/${d.day}`,
+            score: log?.score ?? 0,
+            completed: !!log?.isDone,
+          };
+        });
+
+        const doneCount = nextChart.filter((x) => x.completed).length;
+        setWeeklyRate(Math.round((doneCount / nextChart.length) * 100));
+        setChartData(nextChart);
+      } catch (e) {
+        console.error("차트/캘린더 데이터 조회 실패:", e);
+        setChartData([]);
+        setWeeklyRate(0);
+      }
+    };
+    fetchChart();
+  }, [user, showDetail, weekOffset, selectedStudyId]);
+
+  useEffect(() => {
+    if (!user) return;
     const fetchData = async () => {
       try {
         // 1. 대시보드 정보
@@ -359,8 +422,10 @@ function DashboardPage() {
             <section css={s.detailSection}>
               <div css={s.detailCard}>
                 <h3 css={s.detailTitle}>수업 성취 진행률</h3>
-                <div css={s.chartPlaceholder}>그래프 영역 (차트 예정)</div>
-                <div css={s.progressFooter}>80%</div>
+                <div css={s.chartPlaceholder}>
+                  <StudyChart data={chartData} />
+                </div>
+                <div css={s.progressFooter}>{weeklyRate}%</div>
               </div>
 
               <div css={s.feedbackCard}>

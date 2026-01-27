@@ -398,3 +398,10 @@ export const feedbackList = css`
     list-style: none;
   }
 `;
+
+export const chartBox = css`
+  height: 200px;
+  border-radius: 8px;
+  background: #f5f5f5;
+  padding: 12px;
+`;
