@@ -141,4 +141,13 @@ export const studyApi = {
     );
     return res.data;
   },
+
+  // 13. 월간 캘린더(점수/완료여부) 조회
+  getMonthlyCalendar: async ({ year, month, planId }) => {
+    const params = { year, month };
+    if (planId) params.planId = planId;
+
+    const response = await api.get("/api/study/calendar", { params });
+    return response.data;
+  },
 };
