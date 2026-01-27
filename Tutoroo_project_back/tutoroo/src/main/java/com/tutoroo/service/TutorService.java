@@ -107,7 +107,8 @@ public class TutorService {
 
         String finalSystemPrompt = promptBuilder.toString();
 
-        // 4. AI 오프닝 멘트 및 유동적 스케줄 요청 (즉시 질문 시작)
+        // 4. AI 오프닝 멘트 및 스케줄 요청 (프롬프트 수정됨)
+        // [핵심 수정] CLASS 시간을 3000초(50분)로 고정하도록 강력하게 지시
         String userPrompt = String.format("""
                 상황: %d일차 수업 시작. 주제: %s. 학생 기분: %s.
                 
@@ -115,14 +116,18 @@ public class TutorService {
                 1. 오프닝 멘트 후, **즉시 오늘의 핵심 개념을 설명하거나 흥미로운 질문을 던져서 수업을 시작해.**
                 2. 학생이 바로 대답하거나 생각할 거리를 줘야 해.
                 3. 오늘 수업의 **세션별 시간(초 단위)**을 JSON 형식으로 제안해.
-                   (필수 키: CLASS, BREAK, TEST, GRADING, EXPLANATION, AI_FEEDBACK, STUDENT_FEEDBACK)
+                
+                [★ 시간 설정 규칙 (절대 준수)]
+                - "CLASS" (수업 시간): 반드시 **3000** (50분)으로 설정할 것.
+                - "BREAK" (쉬는 시간): **600** (10분)으로 설정할 것.
+                - 나머지(TEST 등)는 자유롭게 제안.
                 
                 [매우 중요 - 응답 형식]
                 반드시 아래 형식을 정확히 지키세요. JSON 데이터는 반드시 맨 마지막에 위치해야 합니다.
                 주제 | 수업 시작 멘트(질문 포함) | JSON_DATA
                 
                 예시:
-                자바 기초 | 자바의 꽃은 객체지향이죠! 그럼 객체란 무엇일까요? | {"CLASS": 3000, "BREAK": 600}
+                자바 기초 | 자바의 꽃은 객체지향이죠! 그럼 객체란 무엇일까요? | {"CLASS": 3000, "BREAK": 600, "TEST": 900}
                 """, request.dayCount(), plan.getGoal(), request.dailyMood());
 
         String response = chatClientBuilder.build()
@@ -170,8 +175,11 @@ public class TutorService {
         Map<String, Integer> scheduleMap = new HashMap<>();
         try {
             scheduleMap = objectMapper.readValue(scheduleJson, Map.class);
+            // [안전장치] 혹시 AI가 말을 안 들었을 경우를 대비해 강제 덮어쓰기
+            scheduleMap.put("CLASS", 3000);
         } catch (Exception e) {
             log.warn("⚠️ AI 스케줄 파싱 실패, 기본값 사용. JSON: {}", scheduleJson);
+            scheduleMap.put("CLASS", 3000); // 파싱 실패 시에도 기본값 보장
         }
 
         // 7. TTS 생성 (needsTts가 true일 때만)
@@ -190,7 +198,7 @@ public class TutorService {
         );
     }
 
-    // --- [2] 세션(모드) 변경 시 AI 멘트 및 이미지 생성 (NEW) ---
+    // --- [2] 세션(모드) 변경 시 AI 멘트 및 이미지 생성 ---
     @Transactional
     public TutorDTO.SessionStartResponse startSession(Long userId, TutorDTO.SessionStartRequest request) {
         String mode = request.sessionMode();
@@ -198,16 +206,16 @@ public class TutorService {
 
         // 1. 모드별 상황 및 이미지 설정
         String situationPrompt;
-        String imageUrl = null; // 기본값 null (프론트에서 처리)
+        String imageUrl = null;
 
         switch (mode) {
             case "BREAK" -> {
                 situationPrompt = "상황: 수업이 끝나고 쉬는 시간(Break Time)이 시작되었어. 학생에게 '수고했어, 잠시 머리 좀 식히고 와'라는 뉘앙스로 격려해줘.";
-                imageUrl = "/images/break_time.png"; // 쉬는 시간 이미지
+                imageUrl = "/images/break_time.png";
             }
             case "TEST" -> {
                 situationPrompt = "상황: 이제 데일리 테스트(Test) 시간이야. '오늘 배운 내용을 확인해볼까? 준비되면 시작하자'라고 긴장감을 줘.";
-                imageUrl = "/images/quiz_bg.png"; // 테스트 배경 이미지
+                imageUrl = "/images/quiz_bg.png";
             }
             case "GRADING" -> {
                 situationPrompt = "상황: 학생이 테스트를 제출했고, AI인 네가 채점(Grading)을 진행하는 중이야. '잠시만 기다려, 꼼꼼히 확인해볼게'라고 말해줘.";
@@ -240,13 +248,13 @@ public class TutorService {
                 .call()
                 .content();
 
-        // 4. TTS 생성 (요청 시에만)
+        // 4. TTS 생성
         String audioUrl = null;
         if (request.needsTts()) {
             audioUrl = generateTtsAudio(aiMessage, personaName);
         }
 
-        // 5. 이미지가 지정되지 않은 경우 튜터 이미지 사용
+        // 5. 이미지
         if (imageUrl == null) {
             imageUrl = "/images/tutors/" + personaName.toLowerCase() + ".png";
         }
@@ -258,7 +266,6 @@ public class TutorService {
     @Transactional(readOnly = true)
     public TutorDTO.DailyTestResponse generateTest(Long userId, Long planId, int dayCount) {
         String question = "Java의 Garbage Collection이 주로 발생하는 메모리 영역은?";
-        // 테스트 문제는 보통 TTS가 필요하므로 생성
         String voiceUrl = generateTtsAudio(question, "TIGER");
 
         return new TutorDTO.DailyTestResponse(
@@ -301,7 +308,6 @@ public class TutorService {
             eventPublisher.publishEvent(new StudyCompletedEvent(userId, score));
         }
 
-        // 피드백 오디오 생성 (기본 활성화)
         String audioUrl = generateTtsAudio(feedbackMsg, plan.getPersona());
 
         return new TutorDTO.TestFeedbackResponse(
@@ -315,7 +321,7 @@ public class TutorService {
         );
     }
 
-    // --- [5] 커리큘럼 조정 채팅 (needsTts 지원) ---
+    // --- [5] 커리큘럼 조정 채팅 ---
     @Transactional
     public TutorDTO.FeedbackChatResponse adjustCurriculum(Long userId, Long planId, String message, boolean needsTts) {
         StudyPlanEntity plan = studyMapper.findById(planId);
@@ -328,7 +334,6 @@ public class TutorService {
         String baseSystemContent = commonMapper.findPromptContentByKey("TEACHER_" + personaName);
         if (baseSystemContent == null) baseSystemContent = "친절한 AI 선생님입니다.";
 
-        // 커스텀 이름 적용
         String customName = plan.getCustomTutorName();
         StringBuilder systemPrompt = new StringBuilder(baseSystemContent);
 
@@ -378,7 +383,6 @@ public class TutorService {
             log.error("History Save Error", e);
         }
 
-        // TTS 생성 (조건부)
         String audioUrl = null;
         if (needsTts) {
             audioUrl = generateTtsAudio(aiResponse, personaName);
@@ -387,12 +391,11 @@ public class TutorService {
         return new TutorDTO.FeedbackChatResponse(aiResponse, audioUrl);
     }
 
-    // --- [6] 음성 인식 (STT) ---
+    // --- [6] STT ---
     public String convertSpeechToText(MultipartFile audio) {
         try {
-            // [Fix] 프론트엔드에서 audio/webm으로 보내므로 확장자 처리
             String originalFilename = audio.getOriginalFilename();
-            String extension = ".webm"; // 기본값 (브라우저 표준)
+            String extension = ".webm";
             if (originalFilename != null && originalFilename.contains(".")) {
                 extension = originalFilename.substring(originalFilename.lastIndexOf("."));
             }
@@ -410,13 +413,12 @@ public class TutorService {
         }
     }
 
-    // --- [7] 학생 피드백 저장 ---
+    // --- [기타 메서드들] ---
     @Transactional
     public void saveStudentFeedback(TutorDTO.TutorReviewRequest request) {
         studyMapper.updateStudentFeedback(request.planId(), request.dayCount(), request.feedback());
     }
 
-    // --- [8] 시험 생성 ---
     @Transactional(readOnly = true)
     public TutorDTO.ExamGenerateResponse generateExam(Long userId, Long planId, int startDay, int endDay) {
         List<TutorDTO.ExamGenerateResponse.ExamQuestion> questions = new ArrayList<>();
@@ -424,15 +426,11 @@ public class TutorService {
         return new TutorDTO.ExamGenerateResponse("주간 평가", questions);
     }
 
-    // --- [9] 시험 제출 ---
     @Transactional
     public TutorDTO.ExamResultResponse submitExam(Long userId, TutorDTO.ExamSubmitRequest request) {
-        return new TutorDTO.ExamResultResponse(
-                90, 1, "훌륭해요! 만점에 가까운 점수입니다.", List.of(), true
-        );
+        return new TutorDTO.ExamResultResponse(90, 1, "훌륭해요!", List.of(), true);
     }
 
-    // --- [10] 커스텀 튜터 이름 변경 ---
     @Transactional
     public void renameCustomTutor(Long planId, String newName) {
         StudyPlanEntity plan = studyMapper.findById(planId);
@@ -442,15 +440,13 @@ public class TutorService {
         }
     }
 
-    // --- [Private] TTS 생성 및 파일 저장 ---
+    // --- [TTS 생성 (Private)] ---
     private String generateTtsAudio(String text, String personaName) {
         try {
-            // 캐시 확인
             String textHash = generateHash(text + (personaName != null ? personaName : "DEFAULT"));
             TtsCacheEntity cached = commonMapper.findTtsCacheByHash(textHash);
             if (cached != null) return cached.getAudioPath();
 
-            // 목소리 선택
             OpenAiAudioApi.SpeechRequest.Voice voice = OpenAiAudioApi.SpeechRequest.Voice.ALLOY;
             if (personaName != null) {
                 String pUpper = personaName.toUpperCase();
@@ -461,7 +457,6 @@ public class TutorService {
                 else if (pUpper.contains("TURTLE") || pUpper.contains("거북이")) voice = OpenAiAudioApi.SpeechRequest.Voice.ALLOY;
             }
 
-            // OpenAI API 호출
             SpeechResponse res = speechModel.call(
                     new SpeechPrompt(text, OpenAiAudioSpeechOptions.builder()
                             .model("tts-1")
@@ -470,10 +465,7 @@ public class TutorService {
             );
             byte[] audioData = res.getResult().getOutput();
 
-            // 파일 저장 (FileStore)
             String fileUrl = fileStore.storeFile(audioData, ".mp3");
-
-            // 캐시 DB 저장
             commonMapper.saveTtsCache(TtsCacheEntity.builder().textHash(textHash).audioPath(fileUrl).build());
 
             return fileUrl;

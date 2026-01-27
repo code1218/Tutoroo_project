@@ -84,6 +84,14 @@ export const bubble = (isUser) => css`
   white-space: pre-wrap; 
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   
+  & > img {
+    display: block;
+    object-fit: contain;
+    max-width: 100%;
+    border-radius: 8px;
+    margin-bottom: 10px;
+  }
+
   ${isUser
     ? css`
         background-color: ${theme.colors.primary};

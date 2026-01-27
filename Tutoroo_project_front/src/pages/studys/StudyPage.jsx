@@ -10,7 +10,11 @@ import turtleImg from "../../assets/images/mascots/logo_turtle.png";
 import rabbitImg from "../../assets/images/mascots/logo_rabbit.png";
 import kangarooImg from "../../assets/images/mascots/logo_icon.png";
 import dragonImg from "../../assets/images/mascots/logo_dragon.png";
+import { HiMiniSpeakerWave, HiMiniSpeakerXMark } from "react-icons/hi2";
+import { FaCircle } from "react-icons/fa";
+import { PiMicrophoneStageFill } from "react-icons/pi";
 
+// 튜터 이미지 매핑 객체
 const TUTOR_IMAGES = {
   tiger: tigerImg,
   turtle: turtleImg,
@@ -20,8 +24,8 @@ const TUTOR_IMAGES = {
   dragon: dragonImg 
 };
 
-// [필수] 백엔드 URL 상수
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+// 백엔드 URL (환경변수 또는 기본값)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 function StudyPage() {
   const { 
@@ -54,19 +58,21 @@ function StudyPage() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isChatLoading, isRecording]);
 
-  // [TTS 재생 로직]
   useEffect(() => {
     if (messages.length > 0 && isSpeakerOn) {
       const lastMsg = messages[messages.length - 1];
       
       if (lastMsg.type === 'AI' && lastMsg.audioUrl) {
         audioRef.current.pause();
+        
         const fullUrl = lastMsg.audioUrl.startsWith("http") 
           ? lastMsg.audioUrl 
           : `${API_BASE_URL}${lastMsg.audioUrl}`;
 
         audioRef.current.src = fullUrl;
-        audioRef.current.play().catch(e => console.log("Audio play blocked:", e));
+        audioRef.current.play().catch(e => {
+            console.log("Audio play blocked (user interaction needed):", e);
+        });
       }
     } else {
         audioRef.current.pause(); 
@@ -83,16 +89,32 @@ function StudyPage() {
     if (e.key === "Enter" && !e.nativeEvent.isComposing) handleSend();
   };
 
-  // [STT 녹음]
+  const getImageSource = (url) => {
+    if (!url) return null;
+
+    if (url.includes('/tutors/')) {
+        const filename = url.split('/').pop().split('.')[0].toLowerCase();
+        return TUTOR_IMAGES[filename] || kangarooImg;
+    }
+
+    if (url.includes('break_time') || url.includes('quiz_bg')) {
+        return currentTutorImage; 
+    }
+
+    return url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
+  };
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
       mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
+      
       audioChunksRef.current = [];
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
+      
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         setIsRecording(false);
@@ -100,14 +122,15 @@ function StudyPage() {
           const text = await studyApi.uploadAudio(audioBlob);
           if (text) setInputText(text); 
         } catch (e) {
-            alert("음성 인식 실패");
+            alert("음성 인식에 실패했습니다.");
         }
         stream.getTracks().forEach(track => track.stop());
       };
+      
       mediaRecorderRef.current.start();
       setIsRecording(true);
     } catch (e) {
-      alert("마이크 권한 필요");
+      alert("마이크 접근 권한이 필요합니다.");
     }
   };
 
@@ -126,7 +149,7 @@ function StudyPage() {
         link.click();
         link.remove();
     } catch (e) {
-        alert("다운로드 실패");
+        alert("다운로드에 실패했습니다.");
     }
   };
 
@@ -136,10 +159,15 @@ function StudyPage() {
       <div css={s.pageContainer}>
         <main css={s.chatArea} ref={scrollRef}>
           {messages.length === 0 ? (
-            <div css={s.placeholder}><p>학습 정보를 불러오는 중...</p></div>
+            <div css={s.placeholder}>
+              <p>학습 정보를 불러오는 중입니다...</p>
+            </div>
           ) : (
             messages.map((msg, index) => {
               const isUser = msg.type === "USER";
+              // 이미지 소스 결정
+              const imgSrc = getImageSource(msg.imageUrl);
+
               return (
                 <div key={index} css={s.messageRow(isUser)}>
                   {!isUser && (
@@ -148,12 +176,12 @@ function StudyPage() {
                     </div>
                   )} 
                   <div css={s.bubble(isUser)}>
-                    {/* [New] 이미지가 있으면 렌더링 */}
-                    {msg.imageUrl && (
+                    {/* [이미지 렌더링] src가 유효할 때만 표시 */}
+                    {imgSrc && (
                         <img 
-                            src={msg.imageUrl.startsWith("http") ? msg.imageUrl : `${API_BASE_URL}${msg.imageUrl}`} 
-                            alt="session-img" 
-                            style={{ maxWidth: '100%', borderRadius: '8px', marginBottom: '10px', display: 'block' }}
+                            src={imgSrc} 
+                            alt="session-visual" 
+                            onError={(e) => e.target.style.display = 'none'} 
                         />
                     )}
                     {msg.content}
@@ -164,7 +192,9 @@ function StudyPage() {
           )}
           {(isChatLoading || isRecording) && (
             <div css={s.messageRow(false)}>
-              <div css={s.aiProfileIcon}><img src={currentTutorImage} alt="tutor" /></div>
+              <div css={s.aiProfileIcon}>
+                <img src={currentTutorImage} alt="tutor" />
+              </div>
               <div css={s.bubble(false)}>
                 {isRecording ? <span css={s.recordingPulse}>🎤 듣고 있어요...</span> : <span className="dot-flashing">...</span>}
               </div>
@@ -176,14 +206,14 @@ function StudyPage() {
                 <SessionStatus />
                 <div css={s.controlToolbar}>
                     <button css={s.iconBtn(isSpeakerOn)} onClick={toggleSpeaker}>
-                        {isSpeakerOn ? "🔊" : "🔇"}
+                        {isSpeakerOn ? <HiMiniSpeakerWave /> : <HiMiniSpeakerXMark />}
                     </button>
                     <button 
                         css={s.iconBtn(isRecording)} 
                         onMouseDown={startRecording} onMouseUp={stopRecording}
                         onTouchStart={startRecording} onTouchEnd={stopRecording}
                     >
-                        {isRecording ? "🔴" : "🎤"}
+                        {isRecording ? <FaCircle /> : <PiMicrophoneStageFill />}
                     </button>
                     {currentMode === 'REVIEW' && (
                         <button css={s.textBtn} onClick={handleDownloadPdf} disabled={isChatLoading}>📄 자료 다운</button>
