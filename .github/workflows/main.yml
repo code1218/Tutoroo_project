@@ -18,6 +18,9 @@ jobs:
       # DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME_JAEWON}}
       # DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD_JAEWON}}
       # APPLICTION_SECRET: ${{secrets.APPLICTION_SECRET_JAEWON}}
+    steps:  
+      - name: test
+        run: echo ${{env.TEST}}
   build:
     needs: set-env-junil
     runs-on: ubuntu-22.04
