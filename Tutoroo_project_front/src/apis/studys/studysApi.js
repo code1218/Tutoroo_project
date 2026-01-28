@@ -137,8 +137,7 @@ export const studyApi = {
 
   getMonthlyCalendar: async ({ year, month, planId }) => {
     const params = { year, month };
-    if (planId) params.planId = planId;
-
+    if (planId != null) params.planId = planId;
     const response = await api.get("/api/study/calendar", { params });
     return response.data;
   },
