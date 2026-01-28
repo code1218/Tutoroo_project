@@ -1,0 +1,38 @@
+name: GCP-VM-CICD
+
+on:
+  push: 
+    branches: [deploy_jaewon, deploy-junil, deploy-gyeonggu, deploy-seongyeb, deploy-sohyun]
+  pull_request: 
+    branches: [deploy_jaewon, deploy-junil, deploy-gyeonggu, deploy-seongyeb, deploy-sohyun]
+
+jobs:
+  set-env_jaewon:
+    if: github.ref == 'refs/heads/deploy_jaewon'
+    runs-on: ubuntu-22.04
+    env:
+      TEST: abcd
+      GCP_VM_HOST: ${{secrets.GCP_VM_HOST_JAEWON}}
+      GCP_VM_USERNAME: ${{secrets.GCP_VM_USERNAME_JAEWON}}
+      GCP_VM_SSHKEY: ${{secrets.GCP_VM_SSHKEY_JAEWON}}
+      DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME_JAEWON}}
+      DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD_JAEWON}}
+      APPLICTION_SECRET: ${{secrets.APPLICTION_SECRET_JAEWON}}
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{github.ref}}
+      - name: test
+        run: echo ${{env.TEST}}
+        
+
+
+
+
+
+
+
+        
