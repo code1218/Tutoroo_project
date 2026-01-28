@@ -7,8 +7,8 @@ on:
     branches: [deploy-junil]
 
 jobs:
-  set-env_jaewon:
-    if: github.ref == 'refs/heads/deploy_jaewon'
+  set-env-junil:
+    if: github.ref == 'refs/heads/deploy-junil'
     runs-on: ubuntu-22.04
     env:
       TEST: abcd
