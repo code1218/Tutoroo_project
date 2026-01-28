@@ -7,35 +7,62 @@ on:
     branches: [deploy-junil]
 
 jobs:
-  set-env-junil:
-    if: github.ref == 'refs/heads/deploy-junil'
+  build-deploy-junil:
     runs-on: ubuntu-22.04
     steps:  
-      - name: test
-        if: github.ref == 'refs/heads/deploy-junil'
+      - name: "환경변수 세팅"
         run: |
-          if [ ${{github.ref}} == 'refs/heads/deploy-junil2' ]; then
-            echo "TEST=abcd" >> $GITHUB_ENV
-          elif [ ${{github.ref}} == 'refs/heads/deploy-junil' ]; then
-            echo "TEST=abcdef" >> $GITHUB_ENV
+          if [ ${{github.ref}} == 'refs/heads/deploy-junil' ]; then
+          
+            echo "GCP_VM_HOST=${{secrets.GCP_VM_HOST_JUNIL}}" >> $GITHUB_ENV
+            echo "GCP_VM_USERNAME=${{secrets.GCP_VM_USERNAME_JUNIL}}" >> $GITHUB_ENV
+            echo "GCP_VM_SSHKEY=${{secrets.GCP_VM_SSHKEY_JUNIL}}" >> $GITHUB_ENV
+            echo "DOCKER_USERNAME=${{secrets.DOCKER_USERNAME_JUNIL}}" >> $GITHUB_ENV
+            echo "DOCKER_PASSWORD=${{secrets.DOCKER_PASSWORD_JUNIL}}" >> $GITHUB_ENV
+            echo "APPLICATION_SECRET=${{secrets.APPLICATION_SECRET_JUNIL}}" >> $GITHUB_ENV
+            echo "REACT_ENV=${{secrets.REACT_ENV_JUNIL}}" >> $GITHUB_ENV
+            
+          # elif [ ${{github.ref}} == 'refs/heads/deploy-junil' ]; then
+          #   echo "TEST=abcdef" >> $GITHUB_ENV
           fi
-      - name: test
-        run: echo ${{env.TEST}}
-  build:
-    needs: set-env-junil
-    runs-on: ubuntu-22.04
-    steps:
-      - name: checkout
+          
+      - name: Checkout
         uses: actions/checkout@v6.0.2
         with:
           ref: ${{github.ref}}
-      - name: test
-        run: echo ${{env.TEST}}
-        
+          
+      - name: Install JDK
+        uses: actions/setup-java@v5.2.0
+        with:
+          java-version: '21'
+          distribution: 'temurin'
 
+      - name: Springboot Build
+        run: |
+          cd ~/Tutoroo_project_back/tutoroo
+          echo ${{env.APPLICATION_SECRET}} | base64 --decode > ./src/main/resources/application-secret.yml
+          chmod 777 ./mvnw
+          ./mvnw clean package -Dtestskip
 
+      - name: Springboot Docker image build
+        run: |
+          cd ~/Tutoroo_project_back/tutoroo
+          docker build -t ${{env.DOCKER_USERNAME}}/springboot-app:latest .
 
+      - name: Springboot Docker image push
+        run: |
+          echo "${{env.DOCKER_PASSWORD}}" | docker login -u ${{env.DOCKER_USERNAME}} --password-stdin
+          docker push ${{env.DOCKER_USERNAME}}/springboot-app:latest
 
+      - name: React Docker image build
+        run: |
+          cd ~/Tutoroo_project_front
+          echo ${{env.REACT_ENV}} | base64 --decode > .env
+          docker build -t ${{env.DOCKER_USERNAME}}/react-app:latest .
+
+      - name: React Docker image push
+        run: |
+          docker push ${{env.DOCKER_USERNAME}}/react-app:latest
 
 
 
