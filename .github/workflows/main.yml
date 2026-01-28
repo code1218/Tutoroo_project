@@ -19,6 +19,7 @@ jobs:
       # DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD_JAEWON}}
       # APPLICTION_SECRET: ${{secrets.APPLICTION_SECRET_JAEWON}}
   build:
+    needs: set-env-junil
     runs-on: ubuntu-22.04
     steps:
       - name: checkout
