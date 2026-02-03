@@ -16,7 +16,7 @@ jobs:
           
             echo "GCP_VM_HOST=${{secrets.GCP_VM_HOST_JUNIL}}" >> $GITHUB_ENV
             echo "GCP_VM_USERNAME=${{secrets.GCP_VM_USERNAME_JUNIL}}" >> $GITHUB_ENV
-            echo "GCP_VM_SSHKEY=(echo '${{ secrets.GCP_VM_SSHKEY_JUNIL }}' | base64 -d)" >> $GITHUB_ENV
+            echo "GCP_VM_SSHKEY=${{ secrets.GCP_VM_SSHKEY_JUNIL }}" >> $GITHUB_ENV
             echo "DOCKER_USERNAME=${{secrets.DOCKER_USERNAME_JUNIL}}" >> $GITHUB_ENV
             echo "DOCKER_PASSWORD=${{secrets.DOCKER_PASSWORD_JUNIL}}" >> $GITHUB_ENV
             echo "APPLICATION_SECRET=${{secrets.APPLICATION_SECRET_JUNIL}}" >> $GITHUB_ENV
@@ -28,7 +28,7 @@ jobs:
       - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.GCP_VM_SSHKEY_JUNIL }}" | base64 -d > ~/.ssh/id_rsa
+          echo "${{ env.GCP_VM_SSHKEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           
           # 검증
