@@ -8,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/pet")
 @RequiredArgsConstructor
@@ -32,7 +34,7 @@ public class PetController {
     public ResponseEntity<String> adoptPet(
             @AuthenticationPrincipal CustomUserDetails user,
             @RequestBody PetDTO.InitialAdoptRequest request) {
-        petService.adoptInitialPet(user.getId(), request.petType());
+        petService.adoptInitialPet(user.getId(), request.petType(), request.petName());
         return ResponseEntity.ok("새로운 펫을 입양했습니다! 사랑으로 키워주세요.");
     }
 
@@ -47,7 +49,7 @@ public class PetController {
     public ResponseEntity<String> hatchEgg(
             @AuthenticationPrincipal CustomUserDetails user,
             @RequestBody PetDTO.EggSelectRequest request) {
-        petService.hatchEgg(user.getId(), request.selectedPetType());
+        petService.hatchEgg(user.getId(), request.selectedPetType(), request.petName());
         return ResponseEntity.ok("알이 부화했습니다! 새로운 친구와 여정을 시작하세요.");
     }
 
@@ -68,4 +70,20 @@ public class PetController {
         petService.createCustomPet(user.getId(), request);
         return ResponseEntity.ok("나만의 커스텀 펫이 탄생했습니다!");
     }
+
+    @GetMapping("/diaries")
+    public ResponseEntity<List<PetDTO.PetDiaryResponse>> getDiaries(@AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok(petService.getMyDiaries(user.getId()));
+    }
+
+//-------------------------------------------------------------------
+//    @GetMapping("/test/diary")
+//    public ResponseEntity<String> testDiary(@AuthenticationPrincipal CustomUserDetails user) {
+//        try {
+//            petService.writeMidnightDiary(user.getId());
+//            return ResponseEntity.ok("✅ 테스트 성공! DB의 pet_diary 테이블을 확인해보세요.");
+//        } catch (Exception e) {
+//            return ResponseEntity.ok("❌ 실패: " + e.getMessage());
+//        }
+//    }
 }

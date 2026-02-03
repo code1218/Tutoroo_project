@@ -14,31 +14,45 @@ export const studyApi = {
     return response.data;
   },
 
-  // 3. 학습 로그 저장 (단순 저장)
+  // 3. 학습 플랜 삭제
+  deleteStudyPlan: async (planId) => {
+    const response = await api.delete(`/api/study/plans/${planId}`);
+    return response.data;
+  },
+
+  // 4. 학습 로그 저장 (단순 저장용)
   saveStudyLog: async (logData) => {
     const response = await api.post("/api/study/logs", logData);
     return response.data;
   },
 
-  // 4. 메시지 전송 (채팅)
-  // [수정] needsTts 파라미터 추가
-  sendChatMessage: async ({ planId, message, needsTts }) => {
-    const response = await api.post("/api/tutor/feedback/chat", {
-      planId,
-      message,
-      needsTts, // [New] TTS 생성 여부 (true/false)
+  // 5. 메시지 전송 (채팅) - 이미지 지원 추가
+  sendChatMessage: async ({ planId, message, needsTts, imageFile }) => {
+    const formData = new FormData();
+    
+    const requestData = { planId, message, needsTts };
+    formData.append(
+      "data",
+      new Blob([JSON.stringify(requestData)], { type: "application/json" })
+    );
+
+    if (imageFile) {
+      formData.append("image", imageFile);
+    }
+
+    const response = await api.post("/api/tutor/feedback/chat", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
     return response.data;
   },
 
-  // 5. 진행 중인 학습 목록 조회 (사이드바 등)
+  // 6. 진행 중인 학습 목록 조회 (대시보드 리스트)
   getStudyList: async () => {
     const response = await api.get("/api/study/list");
     return response.data;
   },
 
-  // 6. 수업 시작하기 (오프닝 + 스케줄 생성)
-  // [수정] needsTts 파라미터 추가
+  // 7. 수업 시작 (오프닝)
   startClass: async ({
     planId,
     dayCount,
@@ -52,14 +66,13 @@ export const studyApi = {
       dayCount,
       personaName,
       dailyMood,
-      customOption, // 커스텀 요구사항
-      needsTts, // [New] TTS 생성 여부
+      customOption,
+      needsTts,
     });
     return response.data;
   },
 
-  // 7. [New] 세션(모드) 변경 알림 및 AI 멘트 요청
-  // BREAK, TEST, GRADING 등 모드가 바뀔 때 호출
+  // 8. 세션(모드) 변경 알림 및 AI 멘트 요청
   startSessionMode: async ({
     planId,
     sessionMode,
@@ -69,7 +82,7 @@ export const studyApi = {
   }) => {
     const response = await api.post("/api/tutor/session/start", {
       planId,
-      sessionMode, // CLASS, BREAK, TEST ...
+      sessionMode,
       personaName,
       dayCount,
       needsTts,
@@ -77,10 +90,9 @@ export const studyApi = {
     return response.data;
   },
 
-  // 8. 음성 인식 (STT) - 오디오 파일 전송
+  // 9. 음성 인식 (STT)
   uploadAudio: async (audioBlob) => {
     const formData = new FormData();
-    // 파일명은 확장자를 맞추기 위해 임의로 지정 (백엔드에서 확장자 감지함)
     formData.append("audio", audioBlob, "recording.webm");
 
     const response = await api.post("/api/tutor/stt", formData, {
@@ -88,10 +100,10 @@ export const studyApi = {
         "Content-Type": "multipart/form-data",
       },
     });
-    return response.data; // 변환된 텍스트 반환
+    return response.data;
   },
 
-  // 9. 데일리 테스트 문제 생성 요청
+  // 10. 데일리 테스트 문제 생성 요청
   generateDailyTest: async (planId, dayCount) => {
     const response = await api.get("/api/tutor/test/generate", {
       params: { planId, dayCount },
@@ -99,12 +111,11 @@ export const studyApi = {
     return response.data;
   },
 
-  // 10. 테스트 답안 제출 (이미지 포함 가능)
+  // 11. 테스트 답안 제출
   submitDailyTest: async ({ planId, textAnswer, imageFile }) => {
     const formData = new FormData();
-
-    // JSON 데이터는 Blob으로 감싸서 전달
     const requestData = { planId, textAnswer };
+    
     formData.append(
       "data",
       new Blob([JSON.stringify(requestData)], { type: "application/json" }),
@@ -120,21 +131,33 @@ export const studyApi = {
     return response.data;
   },
 
-  // 11. 복습 자료(PDF) 다운로드
-  downloadReviewPdf: async (planId, dayCount) => {
-    const response = await api.get("/api/study/review/download", {
-      params: { planId, dayCount },
-      responseType: "blob", // 파일 다운로드 설정
+  // 12. 학생 피드백 제출 (튜터 평가)
+  submitStudentFeedback: async ({ planId, dayCount, feedback, rating }) => {
+    const response = await api.post("/api/tutor/review", {
+      planId,
+      dayCount,
+      feedback,
+      rating,
     });
     return response.data;
   },
 
-  // 12. 대시보드 일자별 캘린더안에 들어갈 roadmap 값
+  // 13. 복습 자료(PDF) 다운로드
+  downloadReviewPdf: async (planId, dayCount) => {
+    const response = await api.get("/api/study/review/download", {
+      params: { planId, dayCount },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  // 14. 학습 플랜 상세 정보 (로드맵 등)
   getPlanDetail: async (planId) => {
     const response = await api.get(`/api/study/plans/${planId}`);
     return response.data;
   },
 
+  // 15. 월간 캘린더 데이터 조회
   getMonthlyCalendar: async ({ year, month, planId }) => {
     const params = { year, month };
     if (planId != null) params.planId = planId;
@@ -142,6 +165,9 @@ export const studyApi = {
     return response.data;
   },
 
-  generateAiFeedback: (planId) =>
-    api.post(`/api/study/plans/${planId}/ai-feedback`).then(res => res.data),
+  // 16. AI 피드백 생성 (하루 학습 마감 처리)
+  generateAiFeedback: async (planId) => {
+    const response = await api.post(`/api/study/plans/${planId}/ai-feedback`);
+    return response.data;
+  },
 };

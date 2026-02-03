@@ -46,7 +46,8 @@ public class PetDTO {
 
     // 4. 초기 입양 요청
     public record InitialAdoptRequest(
-            String petType
+            String petType,
+            String petName
     ) {}
 
     // 5. 졸업 후 랜덤 알 후보 응답
@@ -58,7 +59,8 @@ public class PetDTO {
 
     // 6. 알 선택 및 부화 요청
     public record EggSelectRequest(
-            String selectedPetType
+            String selectedPetType,
+            String petName
     ) {}
 
     // 7. [수정] 커스텀 펫 생성 요청 (변수명 Entity와 통일)
@@ -66,5 +68,14 @@ public class PetDTO {
             String petName,           // 기존 name -> petName 수정
             String customDescription, // 기존 description -> customDescription 수정
             String baseType           // 프롬프트 보조용 (예: CAT)
+    ) {}
+
+    // 8. [New] 일기 목록 조회용 응답 DTO
+    @Builder
+    public record PetDiaryResponse(
+            Long diaryId,
+            String date,     // 날짜 (2026-02-02)
+            String content,  // 일기 내용
+            String mood      // 기분 (HAPPY 등)
     ) {}
 }
