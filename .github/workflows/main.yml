@@ -40,7 +40,7 @@ jobs:
       - name: Springboot Build
         run: |
           cd Tutoroo_project_back/tutoroo
-          echo ${{env.APPLICATION_SECRET}} | base64 --decode > ./src/main/resources/application-secret.yml
+          echo ${{env.APPLICATION_SECRET}} | base64 --decode > ./src/main/resources/application-secret-prod.yml
           chmod 777 ./mvnw
           ./mvnw clean package -Dtestskip
 
