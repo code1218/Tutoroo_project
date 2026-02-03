@@ -3,7 +3,7 @@ spring:
     active: dev
     group:
       dev: dev, common, secret-dev
-      junil: junil-server, common, secret-dev
+      junil: junil-server, common, secret-prod
       jaewon: jaewon-server, common, secret-prod
       gyeonggu: gyeonggu-server, common, secret-prod
       seongyeop: seongyeop-server, common, secret-prod
