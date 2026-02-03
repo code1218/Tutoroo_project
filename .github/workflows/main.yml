@@ -25,6 +25,14 @@ jobs:
           # elif [ ${{github.ref}} == 'refs/heads/deploy-junil' ]; then
           #   echo "TEST=abcdef" >> $GITHUB_ENV
           fi
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GCP_VM_SSHKEY_JUNIL }}" | base64 -d > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          
+          # 검증
+          ssh-keygen -l -f ~/.ssh/id_rsa || echo "Invalid key format"
           
       - name: Checkout
         uses: actions/checkout@v6.0.2
