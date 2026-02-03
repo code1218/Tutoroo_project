@@ -1,9 +1,9 @@
 spring:
   profiles:
-    active: dev
+    active: junil
     group:
       dev: dev, common, secret-dev
-      junil: junil-server, common, secret-dev
+      junil: junil-server, common, secret-prod
       jaewon: jaewon-server, common, secret-prod
       gyeonggu: gyeonggu-server, common, secret-prod
       seongyeop: seongyeop-server, common, secret-prod
@@ -14,7 +14,7 @@ spring:
     activate:
       on-profile: dev
 
-      
+
 # [CORS] 프론트엔드 접근 허용 도메인 목록 (추가됨)
 app:
   cors:
