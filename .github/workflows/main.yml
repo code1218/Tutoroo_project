@@ -16,7 +16,7 @@ jobs:
           
             echo "GCP_VM_HOST=${{secrets.GCP_VM_HOST_JUNIL}}" >> $GITHUB_ENV
             echo "GCP_VM_USERNAME=${{secrets.GCP_VM_USERNAME_JUNIL}}" >> $GITHUB_ENV
-            echo "GCP_VM_SSHKEY=$(echo '${{ secrets.GCP_VM_SSHKEY_JUNIL }}' | base64 -d)" >> $GITHUB_ENV
+            echo "GCP_VM_SSHKEY=(echo '${{ secrets.GCP_VM_SSHKEY_JUNIL }}' | base64 -d)" >> $GITHUB_ENV
             echo "DOCKER_USERNAME=${{secrets.DOCKER_USERNAME_JUNIL}}" >> $GITHUB_ENV
             echo "DOCKER_PASSWORD=${{secrets.DOCKER_PASSWORD_JUNIL}}" >> $GITHUB_ENV
             echo "APPLICATION_SECRET=${{secrets.APPLICATION_SECRET_JUNIL}}" >> $GITHUB_ENV
